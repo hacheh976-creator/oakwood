@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { ShoppingBag, ArrowRight } from "lucide-react";
-import oakwoodLogo from "../assets/6d5cd73c5106dcd44ebfe7b3d0815fd92d5b5b0e.png";
 
 export default function RoleSelectionScreen() {
   const navigate = useNavigate();
@@ -36,11 +35,14 @@ export default function RoleSelectionScreen() {
             onClick={handleLogoTap}
             className="focus:outline-none transition-transform active:scale-95"
           >
-            <img 
-              src={oakwoodLogo} 
-              alt="Oakwood Quality Concern" 
-              className="w-64 sm:w-80 h-auto"
-            />
+            <div className="text-center">
+              <h1 className="text-5xl sm:text-6xl font-black text-[#D4C4B0] tracking-wider">
+                OAKWOOD
+              </h1>
+              <p className="text-lg sm:text-xl font-semibold text-[#8B6F47] tracking-widest mt-2">
+                QUALITY CONCERN
+              </p>
+            </div>
           </button>
 
           {/* Subtitle */}
