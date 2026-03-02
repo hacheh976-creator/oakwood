@@ -1,0 +1,82 @@
+import 'package:flutter/material.dart';
+
+class AdminLayoutScreen extends StatefulWidget {
+  final VoidCallback onLogout;
+
+  const AdminLayoutScreen({super.key, required this.onLogout});
+
+  @override
+  State<AdminLayoutScreen> createState() => _AdminLayoutScreenState();
+}
+
+class _AdminLayoutScreenState extends State<AdminLayoutScreen> {
+  int _index = 0;
+
+  final _pages = const [
+    _AdminPage(title: 'Dashboard (Business Report)'),
+    _AdminPage(title: 'Sales Management'),
+    _AdminPage(title: 'Inventory'),
+    _AdminPage(title: 'Expenses'),
+    _AdminPage(title: 'Attendance'),
+    _AdminPage(title: 'Settings'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    const bg = Color(0xFFD4C4B0);
+    const beige = Color(0xFFF5EFE7);
+    const brown = Color(0xFF4A3A2A);
+
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: beige,
+        foregroundColor: brown,
+        elevation: 1,
+        title: const Text('Admin Panel', style: TextStyle(fontWeight: FontWeight.w800)),
+        actions: [
+          TextButton(
+            onPressed: widget.onLogout,
+            child: const Text(
+              'Switch Role / Logout',
+              style: TextStyle(decoration: TextDecoration.underline, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+      body: _pages[_index],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _index,
+        onTap: (i) => setState(() => _index = i),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: Colors.white,
+        unselectedItemColor: const Color(0xFFD4B896),
+        backgroundColor: const Color(0xFF4A3829),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Dash'),
+          BottomNavigationBarItem(icon: Icon(Icons.point_of_sale), label: 'Sales'),
+          BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Stock'),
+          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Expenses'),
+          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Attend'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminPage extends StatelessWidget {
+  final String title;
+  const _AdminPage({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        title,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF2C1810)),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+}

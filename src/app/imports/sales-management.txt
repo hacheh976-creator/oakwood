@@ -1,0 +1,1319 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/sale.dart';
+import '../../providers/sales_provider.dart';
+import 'sale_receipt_screen.dart';
+
+class SalesManagementScreen extends StatefulWidget {
+  const SalesManagementScreen({super.key});
+
+  @override
+  State<SalesManagementScreen> createState() => _SalesManagementScreenState();
+}
+
+class _SalesManagementScreenState extends State<SalesManagementScreen> {
+  final _currency =
+  NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  final _dateFmt = DateFormat('yyyy-MM-dd');
+
+  /// Week | Month | Year | Custom
+  String _range = 'Week';
+  DateTime? _customMonth;
+
+  /// All | Full Payment | Advance | Installment | Discount | Pending
+  String _paymentFilter = 'All';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFD4C4B0),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF5EFE7),
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Sales Management',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF2C1810),
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: Consumer<SalesProvider>(
+          builder: (_, sp, __) {
+            final all = List<Sale>.from(sp.filteredSales);
+            final now = DateTime.now();
+
+            // 1) Date range filter
+            List<Sale> filteredByDate;
+            if (_range == 'Week') {
+              final start = now.subtract(const Duration(days: 7));
+              filteredByDate =
+                  all.where((s) => !s.date.isBefore(start)).toList();
+            } else if (_range == 'Month') {
+              final start = now.subtract(const Duration(days: 30));
+              filteredByDate =
+                  all.where((s) => !s.date.isBefore(start)).toList();
+            } else if (_range == 'Year') {
+              final start = now.subtract(const Duration(days: 365));
+              filteredByDate =
+                  all.where((s) => !s.date.isBefore(start)).toList();
+            } else if (_range == 'Custom' && _customMonth != null) {
+              filteredByDate = all
+                  .where((s) =>
+              s.date.year == _customMonth!.year &&
+                  s.date.month == _customMonth!.month)
+                  .toList();
+            } else {
+              filteredByDate = all;
+            }
+
+            // 2) Payment filter
+            List<Sale> filtered = filteredByDate.where((s) {
+              switch (_paymentFilter) {
+                case 'All':
+                  return true;
+                case 'Full Payment':
+                  return s.paymentType == 'Full Payment';
+                case 'Advance':
+                  return s.paymentType == 'Advance';
+                case 'Installment':
+                  return s.paymentType == 'Installment';
+                case 'Discount':
+                  return s.paymentType == 'Discount';
+                case 'Pending':
+                  return !s.isFullyPaid;
+                default:
+                  return true;
+              }
+            }).toList();
+
+            // 3) Sort newest first
+            filtered.sort((a, b) => b.date.compareTo(a.date));
+
+            // 4) Totals
+            final totalSales =
+            filtered.fold<double>(0, (sum, s) => sum + s.amount);
+            final totalPaid =
+            filtered.fold<double>(0, (sum, s) => sum + s.effectivePaid);
+            final totalRemaining =
+            filtered.fold<double>(0, (sum, s) => sum + s.remaining);
+
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                const Text(
+                  'Record sales, track payments, and tap a sale to see all details or print a receipt.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                _totalsCard(totalSales, totalPaid, totalRemaining),
+                const SizedBox(height: 16),
+
+                _filterRow(context, sp, filtered.length),
+                const SizedBox(height: 12),
+
+                const Text(
+                  'Sales History',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                if (filtered.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 20),
+                    child: Center(
+                      child: Text(
+                        'No sales found for this period and filters.',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF4A3A2A),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  ...filtered.map((s) => _saleCard(context, s)).toList(),
+              ],
+            );
+          },
+        ),
+      ),
+
+      // FAB to add sale
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF4A3829),
+        foregroundColor: Colors.white,
+        onPressed: () => _openSaleDialog(context),
+        icon: const Icon(Icons.add),
+        label: const Text(
+          'Add Sale',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+      ),
+    );
+  }
+
+  // ───────────────────── Summary Card ─────────────────────
+
+  String _rangeLabel() {
+    if (_range != 'Custom') return _range;
+    if (_customMonth == null) return 'Custom';
+    return DateFormat('MMMM yyyy').format(_customMonth!);
+  }
+
+  Widget _totalsCard(
+      double totalSales, double totalPaid, double totalRemaining) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFD4C4B0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 6),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Sales Summary',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF6B5442),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _smallTotalTile(
+                  label: 'Total Sales',
+                  value: _currency.format(totalSales),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _smallTotalTile(
+                  label: 'Paid',
+                  value: _currency.format(totalPaid),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _smallTotalTile(
+                  label: 'Remaining',
+                  value: _currency.format(totalRemaining),
+                  color: const Color(0xFFB00020),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text(
+                'For: ${_rangeLabel()}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF6B5442),
+                ),
+              ),
+              const Spacer(),
+              _rangeChip('Week'),
+              _rangeChip('Month'),
+              _rangeChip('Year'),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: _pickMonth,
+                icon: const Icon(Icons.calendar_month, size: 18),
+                label: Text(
+                  _customMonth == null
+                      ? 'Pick month'
+                      : DateFormat('MMM yyyy').format(_customMonth!),
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF6B5442),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _smallTotalTile({
+    required String label,
+    required String value,
+    Color color = const Color(0xFF2C1810),
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF6B5442),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _rangeChip(String label) {
+    final selected = _range == label;
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: InkWell(
+        onTap: () => setState(() => _range = label),
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFEDE3D7) : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color:
+              selected ? const Color(0xFF6B5442) : const Color(0xFFD4C4B0),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color:
+              selected ? const Color(0xFF2C1810) : const Color(0xFF6B5442),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickMonth() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _customMonth ?? now,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+    setState(() {
+      _range = 'Custom';
+      _customMonth = DateTime(picked.year, picked.month, 1);
+    });
+  }
+
+  // ───────────────────── Filters Row ─────────────────────
+
+  Widget _filterRow(
+      BuildContext context, SalesProvider sp, int countVisible) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD4C4B0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Filters',
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF2C1810),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: sp.selectedCategory,
+                  decoration: InputDecoration(
+                    labelText: 'Category',
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: sp.categories
+                      .map((c) =>
+                      DropdownMenuItem(value: c, child: Text(c)))
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) sp.setCategory(v);
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _paymentFilter,
+                  decoration: InputDecoration(
+                    labelText: 'Payment',
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'All',
+                      child: Text('All'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Full Payment',
+                      child: Text('Full Payment'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Advance',
+                      child: Text('Advance'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Installment',
+                      child: Text('Installment'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Discount',
+                      child: Text('Discount'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Pending',
+                      child: Text('Pending (not fully paid)'),
+                    ),
+                  ],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _paymentFilter = v);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '$countVisible sales found',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF6B5442),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ───────────────────── Sale Card ─────────────────────
+
+  Widget _saleCard(BuildContext context, Sale s) {
+    final effectivePaid = s.effectivePaid;
+    final remaining = s.remaining;
+    final hasDiscount =
+        s.paymentType == 'Discount' && s.discountAmount > 0;
+
+    Color chipBg;
+    Color chipFg;
+    String chipLabel;
+
+    if (s.paymentType == 'Full Payment' || s.isFullyPaid) {
+      chipBg = const Color(0xFFD7F5DD);
+      chipFg = const Color(0xFF1B7F2A);
+      chipLabel =
+      s.paymentType == 'Discount' ? 'Discount' : 'Full Paid';
+    } else if (s.paymentType == 'Advance') {
+      chipBg = const Color(0xFFFFF3C4);
+      chipFg = const Color(0xFF8A6B00);
+      chipLabel = 'Advance';
+    } else if (s.paymentType == 'Installment') {
+      if (s.isFullyPaid) {
+        chipBg = const Color(0xFFD7F5DD);
+        chipFg = const Color(0xFF1B7F2A);
+        chipLabel = 'Installment (Done)';
+      } else {
+        chipBg = const Color(0xFFFFF3C4);
+        chipFg = const Color(0xFF8A6B00);
+        chipLabel = 'Installment (Ongoing)';
+      }
+    } else if (s.paymentType == 'Discount') {
+      chipBg = const Color(0xFFFFF3C4);
+      chipFg = const Color(0xFF8A6B00);
+      chipLabel = 'Discount';
+    } else {
+      chipBg = const Color(0xFFEDEDED);
+      chipFg = const Color(0xFF333333);
+      chipLabel = s.paymentType;
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => _showSaleDetails(context, s),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5EFE7),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFD4C4B0)),
+        ),
+        child: Row(
+          children: [
+            // Date
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEDE3D7),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Center(
+                child: Text(
+                  _dateFmt.format(s.date).substring(5), // MM-dd
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2C1810),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Main info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    s.customer,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2C1810),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    s.product,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF6B5442),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      _chip(
+                        s.category,
+                        const Color(0xFFEDE3D7),
+                        const Color(0xFF6B5442),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Qty: ${s.quantity}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6B5442),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Amount + payment + menu
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  _currency.format(s.amount),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                Text(
+                  'Paid: ${_currency.format(effectivePaid)}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+                if (hasDiscount)
+                  Text(
+                    'Disc: ${s.discountPercent.toStringAsFixed(1)}% '
+                        '(${_currency.format(s.discountAmount)})',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF8A6B00),
+                    ),
+                  )
+                else
+                  Text(
+                    'Remain: ${_currency.format(remaining)}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFB00020),
+                    ),
+                  ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: chipBg,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        chipLabel,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          color: chipFg,
+                        ),
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          _openSaleDialog(context, editSale: s);
+                        } else if (value == 'delete') {
+                          _confirmDelete(context, s);
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: Text('Edit'),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Delete'),
+                        ),
+                      ],
+                      child: const Icon(
+                        Icons.more_horiz,
+                        size: 20,
+                        color: Color(0xFF4A3A2A),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(String text, Color bg, Color fg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: fg,
+        ),
+      ),
+    );
+  }
+
+  // ───────────────────── Detail Bottom Sheet ─────────────────────
+
+  void _showSaleDetails(BuildContext context, Sale s) {
+    final hasDiscount =
+        s.paymentType == 'Discount' && s.discountAmount > 0;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFFF5EFE7),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        s.customer,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF2C1810),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      _currency.format(s.amount),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF2C1810),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Sale ID: ${s.id} • ${_dateFmt.format(s.date)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _chip(
+                      s.paymentType,
+                      const Color(0xFFEDE3D7),
+                      const Color(0xFF6B5442),
+                    ),
+                    _chip(
+                      s.category,
+                      const Color(0xFFEDE3D7),
+                      const Color(0xFF6B5442),
+                    ),
+                    _chip(
+                      'Qty: ${s.quantity}',
+                      const Color(0xFFEDE3D7),
+                      const Color(0xFF6B5442),
+                    ),
+                    _chip(
+                      s.status,
+                      const Color(0xFFEDE3D7),
+                      const Color(0xFF6B5442),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+
+                const Text(
+                  'Product',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  s.product,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+                const Text(
+                  'Payment Details',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                _detailRow(
+                  'Total Amount',
+                  _currency.format(s.amount),
+                ),
+                _detailRow(
+                  'Paid Amount',
+                  _currency.format(s.effectivePaid),
+                ),
+                if (hasDiscount)
+                  _detailRow(
+                    'Discount',
+                    '${s.discountPercent.toStringAsFixed(1)}% '
+                        '(${_currency.format(s.discountAmount)})',
+                  )
+                else
+                  _detailRow(
+                    'Remaining',
+                    _currency.format(s.remaining),
+                  ),
+
+                const SizedBox(height: 12),
+                const Text(
+                  'Extra',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                _detailRow(
+                  'Invoice URL',
+                  s.invoiceUrl.isEmpty ? '—' : s.invoiceUrl,
+                ),
+                _detailRow(
+                  'Notes',
+                  s.notes.isEmpty ? '—' : s.notes,
+                ),
+
+                const SizedBox(height: 10),
+
+                // Buttons row (Receipt + Edit)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context); // close sheet
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SaleReceiptScreen(sale: s),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.receipt_long_outlined),
+                      label: const Text('View / Print receipt'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _openSaleDialog(context, editSale: s);
+                      },
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Edit this sale'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF6B5442),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF2C1810),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ───────────────────── Dialogs ─────────────────────
+
+  void _confirmDelete(BuildContext context, Sale s) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Sale?'),
+        content: Text('Are you sure you want to delete sale ${s.id}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              context.read<SalesProvider>().deleteSale(s.id);
+              Navigator.pop(context);
+            },
+            child: const Text(
+              'Delete',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openSaleDialog(BuildContext context, {Sale? editSale}) {
+    showDialog(
+      context: context,
+      builder: (_) => _SaleFormDialog(editSale: editSale),
+    );
+  }
+}
+
+// ───────────────────── Sale Form Dialog ─────────────────────
+
+class _SaleFormDialog extends StatefulWidget {
+  final Sale? editSale;
+  const _SaleFormDialog({required this.editSale});
+
+  @override
+  State<_SaleFormDialog> createState() => _SaleFormDialogState();
+}
+
+class _SaleFormDialogState extends State<_SaleFormDialog> {
+  final _formKey = GlobalKey<FormState>();
+
+  late final TextEditingController id;
+  late final TextEditingController customer;
+  late final TextEditingController product;
+  late final TextEditingController category;
+  late final TextEditingController quantity;
+  late final TextEditingController amount;
+  late final TextEditingController paidAmount;
+  late final TextEditingController invoiceUrl;
+  late final TextEditingController notes;
+
+  DateTime selectedDate = DateTime.now();
+  String paymentType = 'Full Payment';
+
+  final List<String> _categoryOptions = const [
+    'Sofa',
+    'Chair',
+    'Table',
+    'Bed',
+    'Wardrobe',
+    'Custom Order',
+    'Others',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final s = widget.editSale;
+    id = TextEditingController(text: s?.id ?? '');
+    customer = TextEditingController(text: s?.customer ?? '');
+    product = TextEditingController(text: s?.product ?? '');
+    category = TextEditingController(text: s?.category ?? '');
+    quantity = TextEditingController(text: (s?.quantity ?? 1).toString());
+    amount =
+        TextEditingController(text: (s?.amount ?? 0).toStringAsFixed(0));
+    paidAmount =
+        TextEditingController(text: (s?.paidAmount ?? 0).toStringAsFixed(0));
+    invoiceUrl = TextEditingController(text: s?.invoiceUrl ?? '');
+    notes = TextEditingController(text: s?.notes ?? '');
+    selectedDate = s?.date ?? DateTime.now();
+    paymentType = s?.paymentType ?? 'Full Payment';
+
+    if (s != null &&
+        paymentType == 'Full Payment' &&
+        (s.paidAmount == 0)) {
+      paidAmount.text = s.amount.toStringAsFixed(0);
+    }
+  }
+
+  @override
+  void dispose() {
+    id.dispose();
+    customer.dispose();
+    product.dispose();
+    category.dispose();
+    quantity.dispose();
+    amount.dispose();
+    paidAmount.dispose();
+    invoiceUrl.dispose();
+    notes.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.editSale != null;
+
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      title: Text(
+        isEdit ? 'Edit Sale' : 'New Sale',
+        style: const TextStyle(fontWeight: FontWeight.w900),
+      ),
+      content: SizedBox(
+        width: 520,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                _field(id, 'Sale ID (ex: S006)', enabled: !isEdit),
+                _field(customer, 'Customer name'),
+                _field(product, 'Product'),
+                // Category type (free text)
+                TextFormField(
+                  controller: category,
+                  decoration: InputDecoration(
+                    labelText: 'Category (e.g. Sofa/Chair/Custom...)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Required';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 8),
+                // Quick select category
+                DropdownButtonFormField<String>(
+                  value: null,
+                  isDense: true,
+                  decoration: InputDecoration(
+                    labelText: 'Quick select category (optional)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: _categoryOptions
+                      .map(
+                        (c) => DropdownMenuItem(
+                      value: c,
+                      child: Text(c),
+                    ),
+                  )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) category.text = v;
+                  },
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _field(
+                        quantity,
+                        'Quantity',
+                        number: true,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _field(
+                        amount,
+                        'Total Amount (₹)',
+                        number: true,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Payment type
+                DropdownButtonFormField<String>(
+                  value: paymentType,
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'Full Payment',
+                      child: Text('Full Payment'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Advance',
+                      child: Text('Advance'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Installment',
+                      child: Text('Installment'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Discount',
+                      child: Text('Discount (price reduced)'),
+                    ),
+                  ],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() {
+                      paymentType = v;
+                      if (paymentType == 'Full Payment') {
+                        final total =
+                            double.tryParse(amount.text.trim()) ?? 0;
+                        paidAmount.text = total.toStringAsFixed(0);
+                      }
+                    });
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Payment Type',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _field(
+                  paidAmount,
+                  'Paid Amount (₹)',
+                  number: true,
+                ),
+                const SizedBox(height: 10),
+                // Date
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                      initialDate: selectedDate,
+                    );
+                    if (picked != null) {
+                      setState(() => selectedDate = picked);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFFD4C4B0),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.calendar_month,
+                          color: Color(0xFF6B5442),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          DateFormat('yyyy-MM-dd').format(selectedDate),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _field(
+                  invoiceUrl,
+                  'Invoice URL (image/PDF, optional)',
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: notes,
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    labelText: 'Notes (optional)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) return;
+
+            final qty = int.tryParse(quantity.text.trim()) ?? 1;
+            final totalAmount =
+                double.tryParse(amount.text.trim()) ?? 0;
+            final paid = double.tryParse(paidAmount.text.trim()) ?? 0;
+
+            if (totalAmount <= 0) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Enter a valid total amount'),
+                ),
+              );
+              return;
+            }
+
+            // Status: if discount, treat as completed. otherwise based on remaining.
+            String status;
+            if (paymentType == 'Discount') {
+              status = 'Completed';
+            } else {
+              status = paid >= totalAmount ? 'Completed' : 'Pending';
+            }
+
+            final sale = Sale(
+              id: id.text.trim(),
+              customer: customer.text.trim(),
+              product: product.text.trim(),
+              category: category.text.trim(),
+              quantity: qty,
+              amount: totalAmount,
+              date: selectedDate,
+              status: status,
+              paymentType: paymentType,
+              paidAmount: paid,
+              invoiceUrl: invoiceUrl.text.trim(),
+              notes: notes.text.trim(),
+            );
+
+            final sp = context.read<SalesProvider>();
+            if (widget.editSale != null) {
+              sp.updateSale(widget.editSale!.id, sale);
+            } else {
+              sp.addSale(sale);
+            }
+
+            Navigator.pop(context);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF4A3829),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: Text(
+            isEdit ? 'Save Changes' : 'Add Sale',
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _field(
+      TextEditingController c,
+      String label, {
+        bool number = false,
+        bool enabled = true,
+      }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextFormField(
+        controller: c,
+        enabled: enabled,
+        keyboardType:
+        number ? TextInputType.number : TextInputType.text,
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        validator: (v) {
+          if (v == null || v.trim().isEmpty) {
+            if (label.toLowerCase().contains('optional')) return null;
+            return 'Required';
+          }
+          if (number && double.tryParse(v.trim()) == null) {
+            return 'Enter a number';
+          }
+          return null;
+        },
+      ),
+    );
+  }
+}

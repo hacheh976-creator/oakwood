@@ -1,0 +1,302 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+import '../../models/order.dart';
+
+class OrderReceiptScreen extends StatelessWidget {
+  final Order order;
+
+  const OrderReceiptScreen({super.key, required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+      decimalDigits: 0,
+    );
+    final dateFmt = DateFormat('yyyy-MM-dd');
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF2C1810),
+        elevation: 0,
+        title: const Text(
+          'Order Receipt',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.black12),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'OAKWOOD FURNITURE',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF2C1810),
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Order Confirmation',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF6B5442),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'Order ID: ${order.id}',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          Text(
+                            'Date: ${dateFmt.format(order.orderDate)}',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          if (order.expectedDate != null)
+                            Text(
+                              'Expected: ${dateFmt.format(order.expectedDate!)}',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+
+                  // Customer
+                  const Text(
+                    'Customer',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF2C1810),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    order.customer,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6B5442),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Item
+                  const Text(
+                    'Order Item',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF2C1810),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Table(
+                    columnWidths: const {
+                      0: FlexColumnWidth(3),
+                      1: FlexColumnWidth(1),
+                      2: FlexColumnWidth(2),
+                    },
+                    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                    children: [
+                      const TableRow(
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              'Description',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              'Qty',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              'Amount',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                        ],
+                      ),
+                      TableRow(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              '${order.product} (${order.category})',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              '${order.quantity}',
+                              style: const TextStyle(fontSize: 12),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              currency.format(order.totalAmount),
+                              style: const TextStyle(fontSize: 12),
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+
+                  const Text(
+                    'Payment Summary',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF2C1810),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  _row('Total Amount',
+                      currency.format(order.totalAmount)),
+                  _row('Advance Paid',
+                      currency.format(order.advanceAmount)),
+                  _row('Remaining Amount',
+                      currency.format(order.remaining)),
+                  _row('Order Type', order.orderType),
+                  _row('Status', order.status),
+
+                  const SizedBox(height: 16),
+
+                  const Text(
+                    'Files & Notes',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF2C1810),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  _row(
+                    'Order Image',
+                    order.imageUrl.isEmpty ? '—' : order.imageUrl,
+                  ),
+                  _row(
+                    'Agreement',
+                    order.agreementUrl.isEmpty ? '—' : order.agreementUrl,
+                  ),
+                  _row(
+                    'Notes',
+                    order.notes.isEmpty ? '—' : order.notes,
+                  ),
+
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 8),
+
+                  const Text(
+                    'Thank you for your order with OAKWOOD Furniture.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6B5442),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'To print this page, use your device or browser print option (Ctrl + P).',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _row(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF6B5442),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF2C1810),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

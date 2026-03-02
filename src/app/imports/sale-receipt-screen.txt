@@ -1,0 +1,315 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+import '../../models/sale.dart';
+
+class SaleReceiptScreen extends StatelessWidget {
+  final Sale sale;
+
+  const SaleReceiptScreen({super.key, required this.sale});
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+      decimalDigits: 0,
+    );
+    final dateFmt = DateFormat('yyyy-MM-dd');
+
+    final hasDiscount =
+        sale.paymentType == 'Discount' && sale.discountAmount > 0;
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF2C1810),
+        elevation: 0,
+        title: const Text(
+          'Sale Receipt',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.black12),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Header / shop info ───────────────────────────────
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'OAKWOOD FURNITURE',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF2C1810),
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Sales Receipt',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF6B5442),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'Date: ${dateFmt.format(sale.date)}',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          Text(
+                            'Sale ID: ${sale.id}',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+                  const Divider(),
+
+                  // ── Customer info ─────────────────────────────────────
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Customer',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF2C1810),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    sale.customer,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6B5442),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ── Product / line item ──────────────────────────────
+                  const Text(
+                    'Item',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF2C1810),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Table(
+                    columnWidths: const {
+                      0: FlexColumnWidth(3),
+                      1: FlexColumnWidth(1),
+                      2: FlexColumnWidth(2),
+                    },
+                    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                    children: [
+                      const TableRow(
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              'Description',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              'Qty',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              'Amount',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                        ],
+                      ),
+                      TableRow(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              '${sale.product} (${sale.category})',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              '${sale.quantity}',
+                              style: const TextStyle(fontSize: 12),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              currency.format(sale.amount),
+                              style: const TextStyle(fontSize: 12),
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+                  const Divider(),
+
+                  // ── Payment summary ──────────────────────────────────
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Payment Summary',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF2C1810),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  _receiptRow(
+                    'Total Amount',
+                    currency.format(sale.amount),
+                  ),
+                  _receiptRow(
+                    'Paid Amount',
+                    currency.format(sale.effectivePaid),
+                  ),
+                  if (hasDiscount)
+                    _receiptRow(
+                      'Discount',
+                      '${sale.discountPercent.toStringAsFixed(1)}% '
+                          '(${currency.format(sale.discountAmount)})',
+                    )
+                  else
+                    _receiptRow(
+                      'Remaining',
+                      currency.format(sale.remaining),
+                    ),
+                  _receiptRow('Payment Type', sale.paymentType),
+                  _receiptRow('Status', sale.status),
+
+                  const SizedBox(height: 16),
+
+                  // ── Invoice / notes ──────────────────────────────────
+                  const Text(
+                    'Additional Info',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF2C1810),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  _receiptRow(
+                    'Invoice URL',
+                    sale.invoiceUrl.isEmpty ? '—' : sale.invoiceUrl,
+                  ),
+                  _receiptRow(
+                    'Notes',
+                    sale.notes.isEmpty ? '—' : sale.notes,
+                  ),
+
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 8),
+
+                  const Text(
+                    'Thank you for shopping with OAKWOOD Furniture.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6B5442),
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+                  const Text(
+                    'For printing: open this page and use your browser or device print option (Ctrl + P).',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _receiptRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF6B5442),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF2C1810),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

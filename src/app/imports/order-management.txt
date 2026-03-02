@@ -1,0 +1,1278 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/order.dart';
+import '../../providers/orders_provider.dart';
+import 'order_receipt_screen.dart';
+
+class OrderManagementScreen extends StatefulWidget {
+  const OrderManagementScreen({super.key});
+
+  @override
+  State<OrderManagementScreen> createState() => _OrderManagementScreenState();
+}
+
+class _OrderManagementScreenState extends State<OrderManagementScreen> {
+  final _currency =
+  NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  final _dateFmt = DateFormat('yyyy-MM-dd');
+
+  String _statusFilter = 'All'; // All / New / In Progress / Ready / Delivered / Cancelled
+  String _typeFilter = 'All';   // All / Standard / Custom
+  String _range = 'All';        // All / Month
+  DateTime? _month;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFD4C4B0),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF5EFE7),
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Order Management',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF2C1810),
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: Consumer<OrdersProvider>(
+          builder: (_, op, __) {
+            var list = List<Order>.from(op.orders);
+            final now = DateTime.now();
+
+            // date range filter
+            if (_range == 'Month' && _month != null) {
+              list = list
+                  .where((o) =>
+              o.orderDate.year == _month!.year &&
+                  o.orderDate.month == _month!.month)
+                  .toList();
+            }
+
+            // status filter
+            if (_statusFilter != 'All') {
+              list = list
+                  .where((o) => o.status.toLowerCase() ==
+                  _statusFilter.toLowerCase())
+                  .toList();
+            }
+
+            // order type filter
+            if (_typeFilter != 'All') {
+              list = list
+                  .where((o) => o.orderType.toLowerCase() ==
+                  _typeFilter.toLowerCase())
+                  .toList();
+            }
+
+            list.sort((a, b) => b.orderDate.compareTo(a.orderDate));
+
+            final totalOrders = list.length;
+            final totalValue =
+            list.fold<double>(0, (sum, o) => sum + o.totalAmount);
+            final totalRemaining =
+            list.fold<double>(0, (sum, o) => sum + o.remaining);
+
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                const Text(
+                  'Create new product orders, attach agreement and reference image, and tap an order to see details or print.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                _summaryCard(totalOrders, totalValue, totalRemaining),
+                const SizedBox(height: 16),
+
+                _filtersCard(list.length),
+                const SizedBox(height: 12),
+
+                const Text(
+                  'Orders',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                if (list.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 24),
+                    child: Center(
+                      child: Text(
+                        'No orders match these filters.',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF4A3A2A),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  ...list.map((o) => _orderCard(context, o)).toList(),
+              ],
+            );
+          },
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF4A3829),
+        foregroundColor: Colors.white,
+        onPressed: () => _openOrderDialog(context),
+        icon: const Icon(Icons.add),
+        label: const Text(
+          'New Order',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+      ),
+    );
+  }
+
+  // ───────────────── Summary ─────────────────
+
+  Widget _summaryCard(int count, double totalValue, double totalRemaining) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFD4C4B0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 6),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Order Summary',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF6B5442),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _smallTile(
+                  label: 'Total Orders',
+                  value: '$count',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _smallTile(
+                  label: 'Total Order Value',
+                  value: _currency.format(totalValue),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _smallTile(
+                  label: 'Remaining Amount',
+                  value: _currency.format(totalRemaining),
+                  color: const Color(0xFFB00020),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _smallTile({
+    required String label,
+    required String value,
+    Color color = const Color(0xFF2C1810),
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF6B5442),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ───────────────── Filters ─────────────────
+
+  Widget _filtersCard(int visibleCount) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD4C4B0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Filters',
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF2C1810),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _statusFilter,
+                  decoration: InputDecoration(
+                    labelText: 'Status',
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'All', child: Text('All')),
+                    DropdownMenuItem(value: 'New', child: Text('New')),
+                    DropdownMenuItem(
+                        value: 'In Progress', child: Text('In Progress')),
+                    DropdownMenuItem(value: 'Ready', child: Text('Ready')),
+                    DropdownMenuItem(
+                        value: 'Delivered', child: Text('Delivered')),
+                    DropdownMenuItem(
+                        value: 'Cancelled', child: Text('Cancelled')),
+                  ],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _statusFilter = v);
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _typeFilter,
+                  decoration: InputDecoration(
+                    labelText: 'Order Type',
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'All', child: Text('All')),
+                    DropdownMenuItem(
+                        value: 'Standard', child: Text('Standard')),
+                    DropdownMenuItem(value: 'Custom', child: Text('Custom')),
+                  ],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _typeFilter = v);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              DropdownButton<String>(
+                value: _range,
+                items: const [
+                  DropdownMenuItem(value: 'All', child: Text('All time')),
+                  DropdownMenuItem(value: 'Month', child: Text('By month')),
+                ],
+                onChanged: (v) {
+                  if (v == null) return;
+                  setState(() => _range = v);
+                },
+              ),
+              const SizedBox(width: 10),
+              if (_range == 'Month')
+                TextButton.icon(
+                  onPressed: _pickMonth,
+                  icon: const Icon(Icons.calendar_month, size: 18),
+                  label: Text(
+                    _month == null
+                        ? 'Pick month'
+                        : DateFormat('MMM yyyy').format(_month!),
+                  ),
+                ),
+              const Spacer(),
+              Text(
+                '$visibleCount orders',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF6B5442),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickMonth() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _month ?? now,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+    setState(() => _month = DateTime(picked.year, picked.month, 1));
+  }
+
+  // ───────────────── Cards ─────────────────
+
+  Widget _orderCard(BuildContext context, Order o) {
+    Color statusBg;
+    Color statusFg;
+
+    switch (o.status) {
+      case 'New':
+        statusBg = const Color(0xFFE3F2FD);
+        statusFg = const Color(0xFF1565C0);
+        break;
+      case 'In Progress':
+        statusBg = const Color(0xFFFFF3C4);
+        statusFg = const Color(0xFF8A6B00);
+        break;
+      case 'Ready':
+        statusBg = const Color(0xFFD7F5DD);
+        statusFg = const Color(0xFF1B7F2A);
+        break;
+      case 'Delivered':
+        statusBg = const Color(0xFFD7F5DD);
+        statusFg = const Color(0xFF1B7F2A);
+        break;
+      case 'Cancelled':
+        statusBg = const Color(0xFFFFD6D6);
+        statusFg = const Color(0xFFB00020);
+        break;
+      default:
+        statusBg = const Color(0xFFEDEDED);
+        statusFg = const Color(0xFF333333);
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => _showOrderDetails(context, o),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5EFE7),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFD4C4B0)),
+        ),
+        child: Row(
+          children: [
+            // image
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: o.imageUrl.isEmpty
+                  ? Container(
+                width: 56,
+                height: 56,
+                color: const Color(0xFFEDE3D7),
+                child: const Icon(Icons.image, color: Color(0xFF6B5442)),
+              )
+                  : Image.network(
+                o.imageUrl,
+                width: 56,
+                height: 56,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 56,
+                  height: 56,
+                  color: const Color(0xFFEDE3D7),
+                  child:
+                  const Icon(Icons.broken_image, color: Colors.grey),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+
+            // middle
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    o.customer,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2C1810),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    o.product,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF6B5442),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      _chip(
+                        o.category,
+                        const Color(0xFFEDE3D7),
+                        const Color(0xFF6B5442),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Qty: ${o.quantity}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6B5442),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Order: ${_dateFmt.format(o.orderDate)}'
+                        '${o.expectedDate != null ? ' • Delivery: ${_dateFmt.format(o.expectedDate!)}' : ''}',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6B5442),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 10),
+
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  _currency.format(o.totalAmount),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                Text(
+                  'Advance: ${_currency.format(o.advanceAmount)}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+                Text(
+                  'Remain: ${_currency.format(o.remaining)}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFB00020),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusBg,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        o.status,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          color: statusFg,
+                        ),
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          _openOrderDialog(context, editOrder: o);
+                        } else if (value == 'delete') {
+                          _confirmDelete(context, o);
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        PopupMenuItem(value: 'delete', child: Text('Delete')),
+                      ],
+                      child: const Icon(
+                        Icons.more_horiz,
+                        size: 20,
+                        color: Color(0xFF4A3A2A),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(String text, Color bg, Color fg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: fg,
+        ),
+      ),
+    );
+  }
+
+  // ───────────────── Details bottom sheet ─────────────────
+
+  void _showOrderDetails(BuildContext context, Order o) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFFF5EFE7),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // header
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        o.customer,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF2C1810),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      _currency.format(o.totalAmount),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF2C1810),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Order ID: ${o.id} • ${_dateFmt.format(o.orderDate)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+                if (o.expectedDate != null)
+                  Text(
+                    'Expected delivery: ${_dateFmt.format(o.expectedDate!)}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6B5442),
+                    ),
+                  ),
+                const SizedBox(height: 10),
+
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _chip(o.orderType, const Color(0xFFEDE3D7),
+                        const Color(0xFF6B5442)),
+                    _chip(o.category, const Color(0xFFEDE3D7),
+                        const Color(0xFF6B5442)),
+                    _chip('Qty: ${o.quantity}', const Color(0xFFEDE3D7),
+                        const Color(0xFF6B5442)),
+                    _chip(o.status, const Color(0xFFEDE3D7),
+                        const Color(0xFF6B5442)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+
+                const Text(
+                  'Product',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  o.product,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+                const Text(
+                  'Payment',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                _detailRow('Total Amount', _currency.format(o.totalAmount)),
+                _detailRow('Advance Paid', _currency.format(o.advanceAmount)),
+                _detailRow('Remaining', _currency.format(o.remaining)),
+
+                const SizedBox(height: 12),
+                const Text(
+                  'Files',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                _detailRow(
+                    'Order Image', o.imageUrl.isEmpty ? '—' : o.imageUrl),
+                _detailRow('Agreement',
+                    o.agreementUrl.isEmpty ? '—' : o.agreementUrl),
+
+                const SizedBox(height: 12),
+                const Text(
+                  'Notes',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  o.notes.isEmpty ? '—' : o.notes,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => OrderReceiptScreen(order: o),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.receipt_long_outlined),
+                      label: const Text('View / Print order'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _openOrderDialog(context, editOrder: o);
+                      },
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Edit'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF6B5442),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF2C1810),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ───────────────── Dialogs ─────────────────
+
+  void _confirmDelete(BuildContext context, Order o) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Order?'),
+        content: Text('Are you sure you want to delete ${o.id}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              context.read<OrdersProvider>().deleteOrder(o.id);
+              Navigator.pop(context);
+            },
+            child: const Text(
+              'Delete',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openOrderDialog(BuildContext context, {Order? editOrder}) {
+    showDialog(
+      context: context,
+      builder: (_) => _OrderFormDialog(editOrder: editOrder),
+    );
+  }
+}
+
+// ───────────────── Order Form Dialog ─────────────────
+
+class _OrderFormDialog extends StatefulWidget {
+  final Order? editOrder;
+  const _OrderFormDialog({required this.editOrder});
+
+  @override
+  State<_OrderFormDialog> createState() => _OrderFormDialogState();
+}
+
+class _OrderFormDialogState extends State<_OrderFormDialog> {
+  final _formKey = GlobalKey<FormState>();
+
+  late final TextEditingController id;
+  late final TextEditingController customer;
+  late final TextEditingController product;
+  late final TextEditingController category;
+  late final TextEditingController quantity;
+  late final TextEditingController totalAmount;
+  late final TextEditingController advanceAmount;
+  late final TextEditingController imageUrl;
+  late final TextEditingController agreementUrl;
+  late final TextEditingController notes;
+
+  DateTime orderDate = DateTime.now();
+  DateTime? expectedDate;
+  String orderType = 'Standard';
+  String status = 'New';
+
+  final List<String> _categoryOptions = const [
+    'Sofa',
+    'Chair',
+    'Bed',
+    'Dining',
+    'Wardrobe',
+    'Custom Furniture',
+    'Others',
+  ];
+
+  final List<String> _imagePresets = const [
+    'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=400',
+    'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=400',
+    'https://images.unsplash.com/photo-1519710164239-da123dc03ef4?w=400',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final o = widget.editOrder;
+
+    id = TextEditingController(text: o?.id ?? '');
+    customer = TextEditingController(text: o?.customer ?? '');
+    product = TextEditingController(text: o?.product ?? '');
+    category = TextEditingController(text: o?.category ?? '');
+    quantity =
+        TextEditingController(text: (o?.quantity ?? 1).toString());
+    totalAmount =
+        TextEditingController(text: (o?.totalAmount ?? 0).toStringAsFixed(0));
+    advanceAmount =
+        TextEditingController(text: (o?.advanceAmount ?? 0).toStringAsFixed(0));
+    imageUrl = TextEditingController(text: o?.imageUrl ?? '');
+    agreementUrl = TextEditingController(text: o?.agreementUrl ?? '');
+    notes = TextEditingController(text: o?.notes ?? '');
+
+    orderDate = o?.orderDate ?? DateTime.now();
+    expectedDate = o?.expectedDate;
+    orderType = o?.orderType ?? 'Standard';
+    status = o?.status ?? 'New';
+  }
+
+  @override
+  void dispose() {
+    id.dispose();
+    customer.dispose();
+    product.dispose();
+    category.dispose();
+    quantity.dispose();
+    totalAmount.dispose();
+    advanceAmount.dispose();
+    imageUrl.dispose();
+    agreementUrl.dispose();
+    notes.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.editOrder != null;
+
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      title: Text(
+        isEdit ? 'Edit Order' : 'New Order',
+        style: const TextStyle(fontWeight: FontWeight.w900),
+      ),
+      content: SizedBox(
+        width: 520,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                _field(id, 'Order ID (ex: O003)', enabled: !isEdit),
+                _field(customer, 'Customer Name'),
+                _field(product, 'Product / Custom item'),
+                TextFormField(
+                  controller: category,
+                  decoration: InputDecoration(
+                    labelText: 'Category (Sofa / Custom / ...)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Required';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: null,
+                  isDense: true,
+                  decoration: InputDecoration(
+                    labelText: 'Quick select category (optional)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: _categoryOptions
+                      .map(
+                        (c) =>
+                        DropdownMenuItem(value: c, child: Text(c)),
+                  )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) category.text = v;
+                  },
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _field(
+                        quantity,
+                        'Quantity',
+                        number: true,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _field(
+                        totalAmount,
+                        'Total Amount (₹)',
+                        number: true,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _field(
+                  advanceAmount,
+                  'Advance Amount (₹)',
+                  number: true,
+                ),
+                const SizedBox(height: 10),
+                // type + status
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: orderType,
+                        decoration: InputDecoration(
+                          labelText: 'Order Type',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'Standard', child: Text('Standard')),
+                          DropdownMenuItem(
+                              value: 'Custom', child: Text('Custom')),
+                        ],
+                        onChanged: (v) {
+                          if (v == null) return;
+                          setState(() => orderType = v);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: status,
+                        decoration: InputDecoration(
+                          labelText: 'Status',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'New', child: Text('New')),
+                          DropdownMenuItem(
+                              value: 'In Progress',
+                              child: Text('In Progress')),
+                          DropdownMenuItem(
+                              value: 'Ready', child: Text('Ready')),
+                          DropdownMenuItem(
+                              value: 'Delivered', child: Text('Delivered')),
+                          DropdownMenuItem(
+                              value: 'Cancelled', child: Text('Cancelled')),
+                        ],
+                        onChanged: (v) {
+                          if (v == null) return;
+                          setState(() => status = v);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // dates
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                      initialDate: orderDate,
+                    );
+                    if (picked != null) {
+                      setState(() => orderDate = picked);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFD4C4B0)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today,
+                            color: Color(0xFF6B5442)),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Order date: ${DateFormat('yyyy-MM-dd').format(orderDate)}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                      initialDate:
+                      expectedDate ?? orderDate.add(const Duration(days: 7)),
+                    );
+                    if (picked != null) {
+                      setState(() => expectedDate = picked);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFD4C4B0)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_month,
+                            color: Color(0xFF6B5442)),
+                        const SizedBox(width: 10),
+                        Text(
+                          expectedDate == null
+                              ? 'Expected delivery date (optional)'
+                              : 'Expected: ${DateFormat('yyyy-MM-dd').format(expectedDate!)}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                // image + preset
+                _field(
+                  imageUrl,
+                  'Order / product image URL',
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: null,
+                  isDense: true,
+                  decoration: InputDecoration(
+                    labelText: 'Use sample image (optional)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: _imagePresets
+                      .map(
+                        (u) =>
+                        DropdownMenuItem(value: u, child: Text(u)),
+                  )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) imageUrl.text = v;
+                  },
+                ),
+                const SizedBox(height: 10),
+                _field(
+                  agreementUrl,
+                  'Agreement file URL (image/PDF)',
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: notes,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: 'Notes (optional)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: _save,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF4A3829),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: Text(
+            isEdit ? 'Save Changes' : 'Add Order',
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) return;
+
+    final qty = int.tryParse(quantity.text.trim()) ?? 1;
+    final total = double.tryParse(totalAmount.text.trim()) ?? 0;
+    final adv = double.tryParse(advanceAmount.text.trim()) ?? 0;
+
+    if (total <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid total amount')),
+      );
+      return;
+    }
+
+    final order = Order(
+      id: id.text.trim(),
+      customer: customer.text.trim(),
+      product: product.text.trim(),
+      category: category.text.trim(),
+      quantity: qty,
+      totalAmount: total,
+      advanceAmount: adv,
+      orderDate: orderDate,
+      expectedDate: expectedDate,
+      status: status,
+      orderType: orderType,
+      imageUrl: imageUrl.text.trim(),
+      agreementUrl: agreementUrl.text.trim(),
+      notes: notes.text.trim(),
+    );
+
+    final op = context.read<OrdersProvider>();
+    if (widget.editOrder != null) {
+      op.updateOrder(widget.editOrder!.id, order);
+    } else {
+      op.addOrder(order);
+    }
+
+    Navigator.pop(context);
+  }
+
+  Widget _field(
+      TextEditingController c,
+      String label, {
+        bool number = false,
+        bool enabled = true,
+      }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextFormField(
+        controller: c,
+        enabled: enabled,
+        keyboardType:
+        number ? TextInputType.number : TextInputType.text,
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        validator: (v) {
+          if (label.toLowerCase().contains('optional')) return null;
+          if (v == null || v.trim().isEmpty) return 'Required';
+          if (number && double.tryParse(v.trim()) == null) {
+            return 'Enter a number';
+          }
+          return null;
+        },
+      ),
+    );
+  }
+}

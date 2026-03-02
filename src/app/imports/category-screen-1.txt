@@ -1,0 +1,96 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/product_provider.dart';
+import '../../models/category.dart';
+import 'category_products_screen.dart';
+
+class CategoryScreen extends StatelessWidget {
+  const CategoryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final pp = context.watch<ProductProvider>();
+    final categories = pp.categories;
+
+    const background = Color(0xFFF5EDE3);
+    const brown = Color(0xFF5C3B1E);
+
+    return SafeArea(
+      child: Scaffold(
+        backgroundColor: background,
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Categories',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: brown,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: GridView.builder(
+                  itemCount: categories.length,
+                  gridDelegate:
+                  const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 14,
+                    mainAxisSpacing: 14,
+                    childAspectRatio: 1.1,
+                  ),
+                  itemBuilder: (context, index) {
+                    final CategoryModel c = categories[index];
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.pushNamed(
+                          context,
+                          CategoryProductsScreen.routeName,
+                          arguments: CategoryProductsArgs(
+                            // ✅ use categoryName, not categoryId
+                            categoryName: c.name,
+                          ),
+                        );
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.network(
+                              c.imageUrl,
+                              fit: BoxFit.cover,
+                            ),
+                            // you can ignore this deprecation warning for now;
+                            // or later change to withValues()
+                            Container(
+                              color: Colors.black.withOpacity(0.35),
+                            ),
+                            Center(
+                              child: Text(
+                                c.name,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

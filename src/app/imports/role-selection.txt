@@ -1,0 +1,198 @@
+import 'package:flutter/material.dart';
+
+class RoleSelectionScreen extends StatelessWidget {
+  const RoleSelectionScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    const bgColor = Color(0xFFD4C4B0);   // page background
+    const cardColor = Color(0xFFF5EFE7); // cards
+    const darkBrown = Color(0xFF2C1810);
+
+    return Scaffold(
+      backgroundColor: bgColor,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 40),
+
+                  // App icon
+                  Container(
+                    width: 96,
+                    height: 96,
+                    decoration: BoxDecoration(
+                      color: darkBrown,
+                      borderRadius: BorderRadius.circular(32),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 18,
+                          offset: Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.shopping_bag_rounded,
+                      color: Colors.white,
+                      size: 40,
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  const Text(
+                    'OAKWOOD',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      color: darkBrown,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Premium Furniture Store',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF6B5442),
+                    ),
+                  ),
+
+                  const SizedBox(height: 40),
+
+                  // ───── Continue as Customer card ─────
+                  _RoleCard(
+                    icon: Icons.shopping_bag_outlined,
+                    title: 'Continue as Customer',
+                    subtitle: 'Browse and shop premium furniture',
+                    onTap: () {
+                      // ✅ Go into user app (bottom navigation)
+                      Navigator.pushReplacementNamed(
+                        context,
+                        '/user-home',
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ───── Admin Login card ─────
+                  _RoleCard(
+                    icon: Icons.shield_outlined,
+                    title: 'Admin Login',
+                    subtitle: 'Access management dashboard',
+                    onTap: () {
+                      // ✅ Go to password screen
+                      Navigator.pushNamed(
+                        context,
+                        '/admin-login',
+                      );
+                    },
+                  ),
+
+                  const Spacer(),
+
+                  const Text(
+                    '© 2026 OAKWOOD · Version 1.0.0',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF8E7B63),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ===== Reusable card widget used by both buttons =====
+
+class _RoleCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _RoleCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const cardColor = Color(0xFFF5EFE7);
+    const darkBrown = Color(0xFF2C1810);
+
+    return Material(
+      color: cardColor,
+      borderRadius: BorderRadius.circular(32),
+      elevation: 4,
+      shadowColor: Colors.black26,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(32),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: darkBrown,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Icon(icon, color: Colors.white, size: 30),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: darkBrown,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF7D6850),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 18,
+                color: darkBrown,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

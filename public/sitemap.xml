@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Homepage / Role Selection -->
+  <url>
+    <loc>https://oakwoodqualityconcern.com</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  
+  <!-- User Storefront -->
+  <url>
+    <loc>https://oakwoodqualityconcern.com/user</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  
+  <!-- Category Browse -->
+  <url>
+    <loc>https://oakwoodqualityconcern.com/user/category</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  
+  <!-- Saved/Favorites -->
+  <url>
+    <loc>https://oakwoodqualityconcern.com/user/saved</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  
+  <!-- Account -->
+  <url>
+    <loc>https://oakwoodqualityconcern.com/user/account</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <!-- Note: Admin routes are excluded from sitemap for security -->
+  <!-- Product and category detail pages are dynamically generated -->
+</urlset>

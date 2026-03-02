@@ -1,0 +1,956 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/product.dart';
+import '../../providers/inventory_provider.dart';
+import '../../widgets/money.dart';
+
+class InventoryScreen extends StatefulWidget {
+  const InventoryScreen({super.key});
+
+  @override
+  State<InventoryScreen> createState() => _InventoryScreenState();
+}
+
+class _InventoryScreenState extends State<InventoryScreen> {
+  // Local stock status filter
+  String _statusFilter = 'All'; // All | In Stock | Low | Out of Stock | Medium
+
+  @override
+  Widget build(BuildContext context) {
+    final inv = context.watch<InventoryProvider>();
+
+    // All products from provider
+    final products = inv.products;
+
+    // Stats
+    final totalProducts = products.length;
+    final totalUnits = products.fold<int>(0, (sum, p) => sum + p.stock);
+    final inStockCount = products.where((p) => p.stock > 15).length; // "Safe"
+    final mediumStockCount =
+        products.where((p) => p.stock > 5 && p.stock <= 15).length;
+    final lowStockCount =
+        products.where((p) => p.stock > 0 && p.stock <= 5).length;
+    final outOfStockCount = products.where((p) => p.stock <= 0).length;
+    final totalValue = inv.totalValue; // already provided in your provider
+
+    // Base list from provider (category filtered)
+    List<Product> filtered = List.of(inv.filteredProducts);
+
+    // Apply local stock status filter
+    filtered = filtered.where((p) {
+      if (_statusFilter == 'All') return true;
+      if (_statusFilter == 'In Stock') return p.stock > 15;
+      if (_statusFilter == 'Medium') return p.stock > 5 && p.stock <= 15;
+      if (_statusFilter == 'Low') return p.stock > 0 && p.stock <= 5;
+      if (_statusFilter == 'Out of Stock') return p.stock <= 0;
+      return true;
+    }).toList();
+
+    // Sort: Out of stock & low stock first, then others
+    filtered.sort((a, b) {
+      int priority(Product p) {
+        if (p.stock <= 0) return 0;
+        if (p.stock <= 5) return 1;
+        if (p.stock <= 15) return 2;
+        return 3;
+      }
+
+      final pa = priority(a);
+      final pb = priority(b);
+      if (pa != pb) return pa.compareTo(pb);
+      // Tie-breaker: by name
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFD4C4B0),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF5EFE7),
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Stock Management',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF2C1810),
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header row
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Overview of all stock items',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF6B5442),
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Add stock, monitor low stock and out-of-stock products easily.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF6B5442),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: () => _openProductDialog(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4A3829),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.add),
+                    label: const Text(
+                      'Add Stock Item',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 18),
+
+              // Statistics cards
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _statCard(
+                    title: 'Total Products',
+                    value: '$totalProducts',
+                    subtitle: 'Unique items in stock list',
+                    icon: Icons.chair_alt_outlined,
+                  ),
+                  _statCard(
+                    title: 'Total Units',
+                    value: '$totalUnits',
+                    subtitle: 'Total pieces across all items',
+                    icon: Icons.inventory_2_outlined,
+                  ),
+                  _statCard(
+                    title: 'Total Stock Value',
+                    value: Money.inr(totalValue),
+                    subtitle: 'Based on selling price',
+                    icon: Icons.currency_rupee_outlined,
+                  ),
+                  _statCard(
+                    title: 'In Stock (Safe)',
+                    value: '$inStockCount',
+                    subtitle: 'More than 15 units',
+                    icon: Icons.check_circle_outline,
+                    color: const Color(0xFF2E7D32),
+                  ),
+                  _statCard(
+                    title: 'Medium Stock',
+                    value: '$mediumStockCount',
+                    subtitle: '6 to 15 units',
+                    icon: Icons.hourglass_bottom_outlined,
+                    color: const Color(0xFFF9A825),
+                  ),
+                  _statCard(
+                    title: 'Low Stock',
+                    value: '$lowStockCount',
+                    subtitle: '1 to 5 units',
+                    icon: Icons.warning_amber_rounded,
+                    color: const Color(0xFFF4511E),
+                  ),
+                  _statCard(
+                    title: 'Out of Stock',
+                    value: '$outOfStockCount',
+                    subtitle: 'Need to restock',
+                    icon: Icons.error_outline,
+                    color: const Color(0xFFB00020),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              // Filters
+              _filtersRow(inv),
+
+              const SizedBox(height: 14),
+
+              // List title
+              Text(
+                'Stock Items (${filtered.length})',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF2C1810),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              if (filtered.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 20),
+                  child: Center(
+                    child: Text(
+                      'No stock items match the selected filters.',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF4A3A2A),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Column(
+                  children: filtered
+                      .map(
+                        (p) => _StockCard(
+                      product: p,
+                      onEdit: () => _openProductDialog(
+                        context,
+                        editProduct: p,
+                      ),
+                      onDelete: () => _confirmDelete(context, p),
+                    ),
+                  )
+                      .toList(),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ───────────────────── Stats Card ─────────────────────
+
+  Widget _statCard({
+    required String title,
+    required String value,
+    required String subtitle,
+    required IconData icon,
+    Color color = const Color(0xFF4A3A2A),
+  }) {
+    return Container(
+      width: 260,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD4C4B0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          )
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ───────────────────── Filters Row ─────────────────────
+
+  Widget _filtersRow(InventoryProvider inv) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD4C4B0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Filters',
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF2C1810),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: inv.selectedCategory,
+                  decoration: InputDecoration(
+                    labelText: 'Category',
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: inv.categories
+                      .map(
+                        (c) => DropdownMenuItem(
+                      value: c,
+                      child: Text(c),
+                    ),
+                  )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) inv.setCategory(v);
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _statusFilter,
+                  decoration: InputDecoration(
+                    labelText: 'Stock status',
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'All',
+                      child: Text('All'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'In Stock',
+                      child: Text('In Stock (Safe)'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Medium',
+                      child: Text('Medium'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Low',
+                      child: Text('Low Stock'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Out of Stock',
+                      child: Text('Out of Stock'),
+                    ),
+                  ],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _statusFilter = v);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ───────────────────── Dialog + Delete ─────────────────────
+
+  void _confirmDelete(BuildContext context, Product p) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Product?'),
+        content: Text(
+          'Are you sure you want to delete "${p.name}" from stock?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              context.read<InventoryProvider>().deleteProduct(p.id);
+              Navigator.pop(context);
+            },
+            child: const Text(
+              'Delete',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openProductDialog(BuildContext context, {Product? editProduct}) {
+    showDialog(
+      context: context,
+      builder: (_) => _ProductFormDialog(editProduct: editProduct),
+    );
+  }
+}
+
+// ───────────────────── Stock Card Widget ─────────────────────
+
+class _StockCard extends StatelessWidget {
+  final Product product;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _StockCard({
+    required this.product,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final value = product.stock * product.price;
+
+    final statusChip = _buildStatusChip(product.stock);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD4C4B0)),
+      ),
+      child: Row(
+        children: [
+          // Product image
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              product.image,
+              width: 58,
+              height: 58,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 58,
+                height: 58,
+                color: Colors.grey.shade300,
+                child: const Icon(Icons.image_not_supported, size: 24),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // Product info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  product.category,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    statusChip,
+                    const SizedBox(width: 8),
+                    Text(
+                      'Qty: ${product.stock}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF6B5442),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          // Price + actions
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                Money.inr(product.price),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF2C1810),
+                ),
+              ),
+              Text(
+                'Value: ${Money.inr(value)}',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF6B5442),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    onPressed: onEdit,
+                    icon: const Icon(
+                      Icons.edit_outlined,
+                      size: 20,
+                      color: Color(0xFF4A3829),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: onDelete,
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      size: 20,
+                      color: Color(0xFFB00020),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(int stock) {
+    late String label;
+    late Color bg;
+    late Color fg;
+
+    if (stock <= 0) {
+      label = 'Out of Stock';
+      bg = const Color(0xFFFFD6D6);
+      fg = const Color(0xFFB00020);
+    } else if (stock <= 5) {
+      label = 'Low Stock';
+      bg = const Color(0xFFFFE0B2);
+      fg = const Color(0xFFF4511E);
+    } else if (stock <= 15) {
+      label = 'Medium Stock';
+      bg = const Color(0xFFFFF3C4);
+      fg = const Color(0xFFF9A825);
+    } else {
+      label = 'In Stock';
+      bg = const Color(0xFFD7F5DD);
+      fg = const Color(0xFF2E7D32);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+          color: fg,
+        ),
+      ),
+    );
+  }
+}
+
+// ───────────────────── Product Form Dialog ─────────────────────
+
+class _ProductFormDialog extends StatefulWidget {
+  final Product? editProduct;
+  const _ProductFormDialog({required this.editProduct});
+
+  @override
+  State<_ProductFormDialog> createState() => _ProductFormDialogState();
+}
+
+class _ProductFormDialogState extends State<_ProductFormDialog> {
+  final _formKey = GlobalKey<FormState>();
+
+  late final TextEditingController id;
+  late final TextEditingController name;
+  late final TextEditingController category;
+  late final TextEditingController stock;
+  late final TextEditingController price;
+  late final TextEditingController image;
+
+  // Some default category options
+  final List<String> _categoryOptions = const [
+    'Sofa',
+    'Chair',
+    'Table',
+    'Bed',
+    'Wardrobe',
+    'Decor',
+    'Materials',
+    'Others',
+  ];
+
+  // Some default image URLs (you can replace with your own pics)
+  final Map<String, String> _defaultImages = const {
+    'Modern Sofa':
+    'https://images.unsplash.com/photo-1616628188473-8e749c2c5c22?w=400',
+    'Classic Chair':
+    'https://images.unsplash.com/photo-1581368135153-8c29c17352e8?w=400',
+    'Dining Table':
+    'https://images.unsplash.com/photo-1519710884009-22a691c97e66?w=400',
+    'Bed':
+    'https://images.unsplash.com/photo-1505691723518-36a5ac3be353?w=400',
+    'Decor':
+    'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?w=400',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.editProduct;
+    id = TextEditingController(text: p?.id.toString() ?? '');
+    name = TextEditingController(text: p?.name ?? '');
+    category = TextEditingController(text: p?.category ?? '');
+    stock = TextEditingController(text: (p?.stock ?? 0).toString());
+    price =
+        TextEditingController(text: (p?.price ?? 0).toStringAsFixed(0));
+    image = TextEditingController(text: p?.image ?? '');
+  }
+
+  @override
+  void dispose() {
+    id.dispose();
+    name.dispose();
+    category.dispose();
+    stock.dispose();
+    price.dispose();
+    image.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.editProduct != null;
+
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      title: Text(
+        isEdit ? 'Edit Stock Item' : 'Add Stock Item',
+        style: const TextStyle(fontWeight: FontWeight.w900),
+      ),
+      content: SizedBox(
+        width: 520,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                _field(
+                  id,
+                  'Product ID (number)',
+                  enabled: !isEdit,
+                  number: true,
+                ),
+                _field(name, 'Product Name'),
+
+                // Category: type + quick select
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextFormField(
+                    controller: category,
+                    decoration: InputDecoration(
+                      labelText:
+                      'Category (Sofa/Chair/Table/Materials/...)',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Required';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: null,
+                  isDense: true,
+                  decoration: InputDecoration(
+                    labelText: 'Quick select category (optional)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: _categoryOptions
+                      .map(
+                        (c) => DropdownMenuItem(
+                      value: c,
+                      child: Text(c),
+                    ),
+                  )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) {
+                      category.text = v;
+                    }
+                  },
+                ),
+
+                const SizedBox(height: 10),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: _field(
+                        stock,
+                        'Stock quantity (0 for out of stock)',
+                        number: true,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _field(
+                        price,
+                        'Selling Price (₹)',
+                        number: true,
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Image URL + default presets
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextFormField(
+                    controller: image,
+                    decoration: InputDecoration(
+                      labelText: 'Image URL (stock picture)',
+                      hintText:
+                      'Paste image link or choose from defaults below',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Required';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _defaultImages.entries.map((entry) {
+                      return InkWell(
+                        onTap: () {
+                          image.text = entry.value;
+                        },
+                        borderRadius: BorderRadius.circular(999),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEDE3D7),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            entry.key,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF4A3829),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Later we can connect real image upload (camera/gallery or Firebase).',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) return;
+
+            final product = Product(
+              id: int.parse(id.text.trim()),
+              name: name.text.trim(),
+              category: category.text.trim(),
+              stock: int.parse(stock.text.trim()),
+              price: int.parse(price.text.trim()),      // ✅ int, not double
+              image: image.text.trim(),
+              description: '',                          // ✅ required field (placeholder)
+              // if your Product has a gallery field with default value, you can omit it;
+              // if it's required, add: gallery: const [],
+            );
+
+            final inv = context.read<InventoryProvider>();
+            if (isEdit) {
+              inv.updateProduct(widget.editProduct!.id, product);
+            } else {
+              inv.addProduct(product);
+            }
+
+            Navigator.pop(context);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF4A3829),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: Text(
+            isEdit ? 'Save Changes' : 'Add',
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _field(
+      TextEditingController c,
+      String label, {
+        bool number = false,
+        bool enabled = true,
+      }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextFormField(
+        controller: c,
+        enabled: enabled,
+        keyboardType:
+        number ? TextInputType.number : TextInputType.text,
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        validator: (v) {
+          if (v == null || v.trim().isEmpty) return 'Required';
+          if (number && double.tryParse(v.trim()) == null) {
+            return 'Enter a number';
+          }
+          return null;
+        },
+      ),
+    );
+  }
+}

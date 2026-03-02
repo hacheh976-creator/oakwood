@@ -1,0 +1,155 @@
+import 'package:flutter/material.dart';
+
+class AdminHomeScreen extends StatelessWidget {
+  const AdminHomeScreen({
+    super.key,
+    required this.onOpenBusinessReport,
+    required this.onOpenSales,
+    required this.onOpenInventory,
+    required this.onOpenExpenses,
+    required this.onOpenAttendance,
+    required this.onOpenSettings,
+  });
+
+  final VoidCallback onOpenBusinessReport;
+  final VoidCallback onOpenSales;
+  final VoidCallback onOpenInventory;
+  final VoidCallback onOpenExpenses;
+  final VoidCallback onOpenAttendance;
+  final VoidCallback onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: GridView.count(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.15,
+        children: [
+          _AdminTile(
+            title: "Business Report",
+            subtitle: "Summary & Stats",
+            icon: Icons.bar_chart_rounded,
+            onTap: onOpenBusinessReport,
+          ),
+          _AdminTile(
+            title: "Sales",
+            subtitle: "Orders & Bills",
+            icon: Icons.point_of_sale_rounded,
+            onTap: onOpenSales,
+          ),
+          _AdminTile(
+            title: "Inventory",
+            subtitle: "Products & Stock",
+            icon: Icons.inventory_2_rounded,
+            onTap: onOpenInventory,
+          ),
+          _AdminTile(
+            title: "Expenses",
+            subtitle: "Costs & Payments",
+            icon: Icons.receipt_long_rounded,
+            onTap: onOpenExpenses,
+          ),
+          _AdminTile(
+            title: "Attendance",
+            subtitle: "Staff Records",
+            icon: Icons.people_alt_rounded,
+            onTap: onOpenAttendance,
+          ),
+          _AdminTile(
+            title: "Settings",
+            subtitle: "Theme / Logout",
+            icon: Icons.settings_rounded,
+            onTap: onOpenSettings,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminTile extends StatelessWidget {
+  const _AdminTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Material(
+      color: isDark ? const Color(0xFF1B1F2A) : const Color(0xFFF5EFE7),
+      borderRadius: BorderRadius.circular(18),
+      elevation: 1.5,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 46,
+                width: 46,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: const Color(0xFF4A3A2A).withOpacity(0.10),
+                ),
+                child: Icon(
+                  icon,
+                  size: 26,
+                  color: const Color(0xFF4A3A2A),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF4A3A2A),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF4A3A2A).withOpacity(0.75),
+                ),
+              ),
+              const Spacer(),
+              Row(
+                children: const [
+                  Text(
+                    "Open",
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF4A3A2A),
+                    ),
+                  ),
+                  SizedBox(width: 6),
+                  Icon(Icons.arrow_forward_rounded,
+                      size: 18, color: Color(0xFF4A3A2A)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

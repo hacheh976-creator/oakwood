@@ -1,0 +1,610 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/theme_provider.dart';
+import '../../providers/auth_provider.dart';
+
+enum AdminSettingsTab { profile, appearance, about, data, support }
+
+class AdminSettingsScreen extends StatefulWidget {
+  const AdminSettingsScreen({super.key});
+
+  @override
+  State<AdminSettingsScreen> createState() => _AdminSettingsScreenState();
+}
+
+class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
+  AdminSettingsTab _tab = AdminSettingsTab.profile;
+
+  // Profile controllers (mock / local only)
+  final _firstName = TextEditingController(text: 'Admin');
+  final _lastName = TextEditingController(text: 'User');
+  final _email = TextEditingController(text: 'admin@store.com');
+  final _bio = TextEditingController(
+    text: 'Store administrator managing inventory, sales, and personnel.',
+  );
+
+  @override
+  void dispose() {
+    _firstName.dispose();
+    _lastName.dispose();
+    _email.dispose();
+    _bio.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFD4C4B0),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= 900;
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left menu
+                SizedBox(
+                  width: isWide ? 320 : 260,
+                  child: _SideMenu(
+                    selected: _tab,
+                    onSelect: (t) => setState(() => _tab = t),
+                  ),
+                ),
+                const SizedBox(width: 16),
+
+                // Right content
+                Expanded(
+                  child: Column(
+                    children: [
+                      _Header(
+                        title: 'Settings',
+                        subtitle:
+                        'Manage your account preferences and system settings',
+                      ),
+                      const SizedBox(height: 16),
+
+                      if (_tab == AdminSettingsTab.profile)
+                        _ProfileCard(
+                          firstName: _firstName,
+                          lastName: _lastName,
+                          email: _email,
+                          bio: _bio,
+                          onSave: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Profile saved (local demo).'),
+                              ),
+                            );
+                          },
+                        ),
+
+                      if (_tab == AdminSettingsTab.appearance)
+                        const _AppearanceCard(),
+
+                      if (_tab == AdminSettingsTab.about)
+                        const _AboutCard(),
+
+                      if (_tab == AdminSettingsTab.data)
+                        _DataCard(
+                          onClear: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content:
+                                Text('Demo: Data cleared (not persisted).'),
+                              ),
+                            );
+                          },
+                        ),
+
+                      if (_tab == AdminSettingsTab.support)
+                        const _SupportCard(),
+
+                      const SizedBox(height: 16),
+
+                      // Bottom actions
+                      _BottomActions(
+                        onLogout: () {
+                          context.read<AuthProvider>().logout();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const _Header({required this.title, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF2C1810),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(subtitle, style: const TextStyle(color: Colors.black54)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SideMenu extends StatelessWidget {
+  final AdminSettingsTab selected;
+  final ValueChanged<AdminSettingsTab> onSelect;
+
+  const _SideMenu({required this.selected, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black12),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 12, offset: Offset(0, 6))
+        ],
+      ),
+      child: Column(
+        children: [
+          _MenuItem(
+            icon: Icons.person_outline,
+            label: 'Profile',
+            active: selected == AdminSettingsTab.profile,
+            onTap: () => onSelect(AdminSettingsTab.profile),
+          ),
+          _MenuItem(
+            icon: Icons.palette_outlined,
+            label: 'Appearance',
+            active: selected == AdminSettingsTab.appearance,
+            onTap: () => onSelect(AdminSettingsTab.appearance),
+          ),
+          _MenuItem(
+            icon: Icons.info_outline,
+            label: 'About Oakwood',
+            active: selected == AdminSettingsTab.about,
+            onTap: () => onSelect(AdminSettingsTab.about),
+          ),
+          _MenuItem(
+            icon: Icons.storage_outlined,
+            label: 'Data & Backup',
+            active: selected == AdminSettingsTab.data,
+            onTap: () => onSelect(AdminSettingsTab.data),
+          ),
+          _MenuItem(
+            icon: Icons.support_agent_outlined,
+            label: 'Support',
+            active: selected == AdminSettingsTab.support,
+            onTap: () => onSelect(AdminSettingsTab.support),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MenuItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _MenuItem({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFEDE3D6) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          border: active
+              ? const Border(left: BorderSide(color: Color(0xFF6B5442), width: 4))
+              : null,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: const Color(0xFF2C1810)),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFF2C1810),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CardShell extends StatelessWidget {
+  final Widget child;
+
+  const _CardShell({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black12),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 12, offset: Offset(0, 6))
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _ProfileCard extends StatelessWidget {
+  final TextEditingController firstName;
+  final TextEditingController lastName;
+  final TextEditingController email;
+  final TextEditingController bio;
+  final VoidCallback onSave;
+
+  const _ProfileCard({
+    required this.firstName,
+    required this.lastName,
+    required this.email,
+    required this.bio,
+    required this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _CardShell(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Profile Information',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              const CircleAvatar(
+                radius: 28,
+                backgroundColor: Color(0xFFD4C4B0),
+                child: Text('AD',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF2C1810))),
+              ),
+              const SizedBox(width: 14),
+              ElevatedButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Avatar picker (add later).')),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6B5442),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('Change Avatar',
+                    style: TextStyle(fontWeight: FontWeight.w900)),
+              ),
+              const SizedBox(width: 12),
+              const Text('JPG/PNG, max 800KB',
+                  style: TextStyle(color: Colors.black54, fontSize: 12)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _field('First Name', firstName)),
+              const SizedBox(width: 12),
+              Expanded(child: _field('Last Name', lastName)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _field('Email Address', email),
+          const SizedBox(height: 12),
+          _multiline('Bio', bio),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton(
+              onPressed: onSave,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6B5442),
+                foregroundColor: Colors.white,
+                padding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Save Changes',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  static Widget _field(String label, TextEditingController c) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: c,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            border:
+            OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          ),
+        ),
+      ],
+    );
+  }
+
+  static Widget _multiline(String label, TextEditingController c) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: c,
+          minLines: 3,
+          maxLines: 5,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            border:
+            OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AppearanceCard extends StatelessWidget {
+  const _AppearanceCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+
+    return _CardShell(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Appearance',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          const Text(
+            'Select a theme. This will apply across the whole app.',
+            style: TextStyle(color: Colors.black54),
+          ),
+          const SizedBox(height: 16),
+
+          ...themeProvider.themes.map((t) {
+            final selected = themeProvider.selectedTheme == t.value;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: InkWell(
+                onTap: () => themeProvider.setTheme(t.value),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: selected ? const Color(0xFF6B5442) : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.black12),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: t.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          t.name,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: selected
+                                ? Colors.white
+                                : const Color(0xFF2C1810),
+                          ),
+                        ),
+                      ),
+                      if (selected)
+                        const Icon(Icons.check, color: Colors.white),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+}
+
+class _AboutCard extends StatelessWidget {
+  const _AboutCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _CardShell(
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('About OAKWOOD',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          SizedBox(height: 10),
+          Text(
+            'OAKWOOD is a premium furniture store offering handcrafted, luxury pieces for modern homes.',
+            style: TextStyle(height: 1.4),
+          ),
+          SizedBox(height: 12),
+          Text('Version 1.0.0 • © 2026 OAKWOOD',
+              style: TextStyle(color: Colors.black54, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+class _DataCard extends StatelessWidget {
+  final VoidCallback onClear;
+  const _DataCard({required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    return _CardShell(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Data & Backup',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 10),
+          const Text(
+            'Suggestions: later you can connect Firebase and keep backup/export.',
+            style: TextStyle(color: Colors.black54),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: onClear,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFE5E5),
+                    foregroundColor: const Color(0xFFD32F2F),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text(
+                    'Clear Demo Data',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SupportCard extends StatelessWidget {
+  const _SupportCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _CardShell(
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Support',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          SizedBox(height: 10),
+          Text(
+            'Suggestions:\n• Add Help Center\n• Add Contact support email\n• Add Terms & Privacy links',
+            style: TextStyle(color: Colors.black54, height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BottomActions extends StatelessWidget {
+  final VoidCallback onLogout;
+  const _BottomActions({required this.onLogout});
+
+  @override
+  Widget build(BuildContext context) {
+    return _CardShell(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Quick Actions',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onLogout,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFFE5E5),
+                foregroundColor: const Color(0xFFD32F2F),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.logout),
+              label: const Text('Logout',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

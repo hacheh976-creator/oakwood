@@ -1,0 +1,965 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/expense.dart';
+import '../../providers/expenses_provider.dart';
+
+class ExpensesScreen extends StatefulWidget {
+  const ExpensesScreen({super.key});
+
+  @override
+  State<ExpensesScreen> createState() => _ExpensesScreenState();
+}
+
+class _ExpensesScreenState extends State<ExpensesScreen> {
+  final _currency = NumberFormat.currency(
+    locale: 'en_IN',
+    symbol: '₹',
+    decimalDigits: 0,
+  );
+  final _dateFmt = DateFormat('yyyy-MM-dd');
+
+  /// Range mode:
+  /// 'Week' | 'Month' | 'Year' | 'Custom'
+  String _range = 'Week';
+
+  /// Selected month for 'Custom' mode (first day of that month)
+  DateTime? _customMonth;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFD4C4B0),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF5EFE7),
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Expenses Management',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF2C1810),
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: Consumer<ExpensesProvider>(
+          builder: (_, ep, __) {
+            final all = ep.allItems;
+
+            // 1) Filter by range (Week / Month / Year / Custom)
+            final now = DateTime.now();
+            List<Expense> filtered;
+
+            if (_range == 'Week') {
+              final start = now.subtract(const Duration(days: 7));
+              filtered = all.where((e) => !e.date.isBefore(start)).toList();
+            } else if (_range == 'Month') {
+              final start = now.subtract(const Duration(days: 30));
+              filtered = all.where((e) => !e.date.isBefore(start)).toList();
+            } else if (_range == 'Year') {
+              final start = now.subtract(const Duration(days: 365));
+              filtered = all.where((e) => !e.date.isBefore(start)).toList();
+            } else if (_range == 'Custom' && _customMonth != null) {
+              filtered = all
+                  .where((e) =>
+              e.date.year == _customMonth!.year &&
+                  e.date.month == _customMonth!.month)
+                  .toList();
+            } else {
+              // Fallback (if no custom month set): show all
+              filtered = List.of(all);
+            }
+
+            // 2) Filter by category from provider (All / Marketing / etc.)
+            if (ep.categoryFilter != 'All') {
+              filtered = filtered
+                  .where((e) => e.category == ep.categoryFilter)
+                  .toList();
+            }
+
+            // 3) Sort newest first
+            filtered.sort((a, b) => b.date.compareTo(a.date));
+
+            // 4) Total for this view
+            final totalForRange =
+            filtered.fold<double>(0, (s, e) => s + e.cost);
+
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Track and review all your expenses with simple filters.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6B5442),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Total + Range + Pick Month
+                  _rangeAndTotalCard(totalForRange),
+                  const SizedBox(height: 16),
+
+                  // Category filter
+                  _categoryFilterRow(ep, filtered.length),
+                  const SizedBox(height: 12),
+
+                  const Text(
+                    'Expense History',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2C1810),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // History list
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? const Center(
+                      child: Text(
+                        'No expenses found for this period.',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF6B5442),
+                        ),
+                      ),
+                    )
+                        : ListView.builder(
+                      itemCount: filtered.length,
+                      itemBuilder: (_, i) {
+                        final e = filtered[i];
+                        return _expenseTile(context, e);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+
+      // Add expense button
+      floatingActionButton: Consumer<ExpensesProvider>(
+        builder: (_, ep, __) => FloatingActionButton.extended(
+          backgroundColor: const Color(0xFF6B5442),
+          foregroundColor: Colors.white,
+          onPressed: () => _openExpenseDialog(context, ep),
+          icon: const Icon(Icons.add),
+          label: const Text(
+            'Add Expense',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ───────────────────── Range & Total Card ─────────────────────
+
+  String _currentRangeLabel() {
+    if (_range != 'Custom') return _range;
+    if (_customMonth == null) return 'Custom';
+    return DateFormat('MMMM yyyy').format(_customMonth!);
+  }
+
+  Widget _rangeAndTotalCard(double totalForRange) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFD4C4B0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 6),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Total Expense',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF6B5442),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _currency.format(totalForRange),
+            style: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF2C1810),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Text(
+                'For: ${_currentRangeLabel()}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF6B5442),
+                ),
+              ),
+              const Spacer(),
+              _rangeChip('Week'),
+              _rangeChip('Month'),
+              _rangeChip('Year'),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: _pickMonth,
+                icon: const Icon(Icons.calendar_month, size: 18),
+                label: Text(
+                  _customMonth == null
+                      ? 'Pick month'
+                      : DateFormat('MMM yyyy').format(_customMonth!),
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF6B5442),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _rangeChip(String label) {
+    final selected = _range == label;
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _range = label;
+            // When user picks Week/Month/Year, we ignore custom month
+          });
+        },
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color:
+            selected ? const Color(0xFFEDE3D7) : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFF6B5442)
+                  : const Color(0xFFD4C4B0),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: selected
+                  ? const Color(0xFF2C1810)
+                  : const Color(0xFF6B5442),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickMonth() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _customMonth ?? now,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+
+    setState(() {
+      _range = 'Custom';
+      _customMonth = DateTime(picked.year, picked.month, 1);
+    });
+  }
+
+  // ───────────────────── Category Filter Row ─────────────────────
+
+  Widget _categoryFilterRow(ExpensesProvider ep, int countVisible) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD4C4B0)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.filter_alt_outlined,
+            color: Color(0xFF6B5442),
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            'Category:',
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF2C1810),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              value: ep.categoryFilter,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              items: ep.categories
+                  .map(
+                    (c) =>
+                    DropdownMenuItem(value: c, child: Text(c)),
+              )
+                  .toList(),
+              onChanged: (v) {
+                if (v == null) return;
+                ep.setCategoryFilter(v);
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            '$countVisible items',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF6B5442),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ───────────────────── Expense List Tile ─────────────────────
+
+  Widget _expenseTile(BuildContext context, Expense e) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => _showExpenseDetails(context, e),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5EFE7),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFD4C4B0)),
+        ),
+        child: Row(
+          children: [
+            // Date block
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEDE3D7),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Center(
+                child: Text(
+                  _dateFmt.format(e.date).substring(5), // MM-dd
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2C1810),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Item + Category + Payment + Qty
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    e.item,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2C1810),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      _smallChip(
+                        e.category,
+                        const Color(0xFFEDE3D7),
+                        const Color(0xFF6B5442),
+                      ),
+                      const SizedBox(width: 6),
+                      _smallChip(
+                        e.paymentMethod,
+                        const Color(0xFFEDE3D7),
+                        const Color(0xFF2C1810),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Qty: ${e.quantity}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6B5442),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // Amount + popup menu
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  _currency.format(e.cost),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (val) {
+                    final ep = context.read<ExpensesProvider>();
+                    if (val == 'edit') {
+                      _openExpenseDialog(context, ep, existing: e);
+                    } else if (val == 'delete') {
+                      ep.deleteExpense(e.id);
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Text('Edit'),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Text('Delete'),
+                    ),
+                  ],
+                  child: const Icon(
+                    Icons.more_horiz,
+                    size: 20,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _smallChip(String text, Color bg, Color fg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: fg,
+        ),
+      ),
+    );
+  }
+
+  // ───────────────────── Expense Details Bottom Sheet ─────────────────────
+
+  void _showExpenseDetails(BuildContext context, Expense e) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFFF5EFE7),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        final ep = context.read<ExpensesProvider>();
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        e.item,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF2C1810),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      _currency.format(e.cost),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF2C1810),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _dateFmt.format(e.date),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B5442),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _smallChip(
+                      e.category,
+                      const Color(0xFFEDE3D7),
+                      const Color(0xFF6B5442),
+                    ),
+                    _smallChip(
+                      e.paymentMethod,
+                      const Color(0xFFEDE3D7),
+                      const Color(0xFF2C1810),
+                    ),
+                    _smallChip(
+                      'Qty: ${e.quantity}',
+                      const Color(0xFFEDE3D7),
+                      const Color(0xFF6B5442),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+
+                const Text(
+                  'Details',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF2C1810),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                _detailRow('Item', e.item),
+                _detailRow('Category', e.category),
+                _detailRow('Quantity', '${e.quantity}'),
+                _detailRow('Payment Method', e.paymentMethod),
+                _detailRow('Date', _dateFmt.format(e.date)),
+                _detailRow('Amount', _currency.format(e.cost)),
+
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _openExpenseDialog(context, ep, existing: e);
+                      },
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Edit'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        ep.deleteExpense(e.id);
+                      },
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      label: const Text(
+                        'Delete',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF6B5442),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF2C1810),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ───────────────────── Add / Edit Dialog ─────────────────────
+
+  Future<void> _openExpenseDialog(
+      BuildContext context,
+      ExpensesProvider ep, {
+        Expense? existing,
+      }) async {
+    final isEdit = existing != null;
+
+    final itemCtrl = TextEditingController(text: existing?.item ?? '');
+    final catCtrl =
+    TextEditingController(text: existing?.category ?? '');
+    final qtyCtrl = TextEditingController(
+        text: existing?.quantity.toString() ?? '1');
+    final costCtrl = TextEditingController(
+        text: existing?.cost.toStringAsFixed(0) ?? '');
+    DateTime date = existing?.date ?? DateTime.now();
+    String payment = existing?.paymentMethod ?? 'Cash';
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            isEdit ? 'Edit Expense' : 'Add Expense',
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  _field(itemCtrl, 'Item'),
+                  const SizedBox(height: 10),
+
+                  // Category text field + dropdown presets
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextField(
+                      controller: catCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Category',
+                        hintText:
+                        'e.g. Marketing, Materials, Payroll...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: null,
+                    isDense: true,
+                    decoration: InputDecoration(
+                      labelText: 'Quick select category (optional)',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Marketing',
+                        child: Text('Marketing'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Materials',
+                        child: Text('Materials'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Payroll',
+                        child: Text('Payroll'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Utilities',
+                        child: Text('Utilities'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Rent',
+                        child: Text('Rent'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Maintenance',
+                        child: Text('Maintenance'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Others',
+                        child: Text('Others'),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) {
+                        // Fill the textfield with chosen category
+                        catCtrl.text = v;
+                      }
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _field(
+                          qtyCtrl,
+                          'Quantity',
+                          keyboard: TextInputType.number,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _field(
+                          costCtrl,
+                          'Cost',
+                          keyboard: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Date picker
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2100),
+                        initialDate: date,
+                      );
+                      if (picked != null) {
+                        setState(() {});
+                        date = picked;
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFD4C4B0),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.calendar_month,
+                            color: Color(0xFF6B5442),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            _dateFmt.format(date),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Payment method
+                  DropdownButtonFormField<String>(
+                    value: payment,
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Cash',
+                        child: Text('Cash'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Card',
+                        child: Text('Card'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Transfer',
+                        child: Text('Transfer'),
+                      ),
+                    ],
+                    onChanged: (v) => payment = v ?? 'Cash',
+                    decoration: InputDecoration(
+                      labelText: 'Payment Method',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final item = itemCtrl.text.trim();
+                final cat = catCtrl.text.trim();
+                final qty = int.tryParse(qtyCtrl.text.trim()) ?? 1;
+                final cost =
+                    double.tryParse(costCtrl.text.trim()) ?? 0;
+
+                if (item.isEmpty || cat.isEmpty || cost <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Please fill Item, Category and a valid Cost',
+                      ),
+                    ),
+                  );
+                  return;
+                }
+
+                final newExpense = Expense(
+                  id: existing?.id ??
+                      DateTime.now()
+                          .millisecondsSinceEpoch
+                          .toString(),
+                  date: date,
+                  item: item,
+                  category: cat,
+                  quantity: qty,
+                  cost: cost,
+                  paymentMethod: payment,
+                );
+
+                if (isEdit) {
+                  ep.updateExpense(existing!.id, newExpense);
+                } else {
+                  ep.addExpense(newExpense);
+                }
+
+                Navigator.pop(context, true);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6B5442),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                isEdit ? 'Save' : 'Add',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+          Text(isEdit ? 'Expense updated' : 'Expense added'),
+        ),
+      );
+    }
+  }
+
+  Widget _field(
+      TextEditingController c,
+      String label, {
+        TextInputType keyboard = TextInputType.text,
+      }) {
+    return TextField(
+      controller: c,
+      keyboardType: keyboard,
+      decoration: InputDecoration(
+        labelText: label,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+}

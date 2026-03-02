@@ -1,0 +1,537 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../providers/attendance_provider.dart';
+import '../../models/attendance.dart';
+
+class AttendanceScreen extends StatelessWidget {
+  const AttendanceScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AttendanceProvider>(
+      builder: (_, attendance, __) {
+        final date = attendance.selectedDate;
+        final monthYear = "${_mName(date.month)} ${date.year}";
+        final top = attendance.topPerformance(date.year, date.month, top: 3);
+
+        return Scaffold(
+          backgroundColor: const Color(0xFFD4C4B0),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text(
+                  "Attendance Management",
+                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Color(0xFF2C1810)),
+                ),
+                const SizedBox(height: 6),
+                const Text("Monitor employee presence and shifts", style: TextStyle(color: Colors.black54)),
+                const SizedBox(height: 16),
+
+                _TopBar(monthYear: monthYear),
+
+                const SizedBox(height: 12),
+
+                if (top.isNotEmpty) _TopPerformanceCard(title: "Top Performance • $monthYear", rows: top),
+
+                const SizedBox(height: 12),
+
+                _BulkActions(),
+
+                const SizedBox(height: 12),
+
+                // ✅ Horizontal scroll for table on small screens
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 900),
+                    child: _AttendanceTable(),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                _PaginationBar(),
+              ]),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TopBar extends StatelessWidget {
+  final String monthYear;
+  const _TopBar({required this.monthYear});
+
+  @override
+  Widget build(BuildContext context) {
+    final attendance = context.watch<AttendanceProvider>();
+    final d = attendance.selectedDate;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black12),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 6))],
+      ),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        alignment: WrapAlignment.spaceBetween,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: d,
+                firstDate: DateTime(2020),
+                lastDate: DateTime(2100),
+              );
+              if (picked != null) attendance.setSelectedDate(picked);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.black12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.calendar_month, size: 18, color: Color(0xFF4A3829)),
+                  const SizedBox(width: 8),
+                  Text("Select Date: ${_fmt(d)}", style: const TextStyle(fontWeight: FontWeight.w800)),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.chevron_right, color: Colors.black54),
+                  const SizedBox(width: 8),
+                  Text(monthYear, style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          ),
+
+          ElevatedButton.icon(
+            onPressed: () => _showHistory(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6B5442),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: const Icon(Icons.history, size: 18),
+            label: const Text("View History", style: TextStyle(fontWeight: FontWeight.w900)),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _showHistory(BuildContext context) {
+    final attendance = context.read<AttendanceProvider>();
+    final now = attendance.selectedDate;
+
+    int year = now.year;
+    int month = now.month;
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setState) {
+          final dates = attendance.datesForMonth(year, month);
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            title: const Text("Attendance History", style: TextStyle(fontWeight: FontWeight.w900)),
+            content: SizedBox(
+              width: 520,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          value: year,
+                          decoration: const InputDecoration(labelText: "Year"),
+                          items: List.generate(7, (i) => (now.year - 3) + i)
+                              .map((y) => DropdownMenuItem(value: y, child: Text("$y")))
+                              .toList(),
+                          onChanged: (v) => setState(() => year = v ?? year),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          value: month,
+                          decoration: const InputDecoration(labelText: "Month"),
+                          items: List.generate(12, (i) => i + 1)
+                              .map((m) => DropdownMenuItem(value: m, child: Text(_mName(m))))
+                              .toList(),
+                          onChanged: (v) => setState(() => month = v ?? month),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text("Saved days: ${dates.length}",
+                        style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.black54)),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 260,
+                    child: dates.isEmpty
+                        ? const Center(child: Text("No saved attendance for this month."))
+                        : ListView.separated(
+                      itemCount: dates.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final d = dates[i];
+                        return ListTile(
+                          title: Text(_fmt(d), style: const TextStyle(fontWeight: FontWeight.w900)),
+                          subtitle: Text("${_mName(d.month)} ${d.year}"),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () {
+                            attendance.setSelectedDate(d);
+                            Navigator.pop(context);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close")),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _BulkActions extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final attendance = context.watch<AttendanceProvider>();
+
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Checkbox(
+              value: attendance.isAllSelected,
+              onChanged: (v) => attendance.setSelectAll(v ?? false),
+            ),
+            const Text("Select All", style: TextStyle(fontWeight: FontWeight.w800)),
+          ],
+        ),
+        const Text("Mark Selected as:", style: TextStyle(fontWeight: FontWeight.w700)),
+        _ActionChip(
+          label: "PRESENT",
+          icon: Icons.check,
+          color: const Color(0xFF6B5442),
+          onTap: () => attendance.markSelectedAs('Present'),
+        ),
+        _ActionChip(
+          label: "ABSENT",
+          icon: Icons.close,
+          color: const Color(0xFF8B6F47),
+          onTap: () => attendance.markSelectedAs('Absent'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AttendanceTable extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final attendance = context.watch<AttendanceProvider>();
+    final list = attendance.pagedEmployees;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black12),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 12, offset: Offset(0, 6))],
+      ),
+      child: Column(
+        children: [
+          const _HeaderRow(),
+          const Divider(height: 1),
+          ...list.map((e) {
+            final AttendanceEntry entry = attendance.entryFor(attendance.selectedDate, e.id);
+            return Column(
+              children: [
+                _EmployeeRow(
+                  employeeId: e.id,
+                  name: e.name,
+                  status: entry.status,
+                  clockIn: entry.clockIn,
+                  clockOut: entry.clockOut,
+                  note: entry.note,
+                ),
+                const Divider(height: 1),
+              ],
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderRow extends StatelessWidget {
+  const _HeaderRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: const Row(
+        children: [
+          SizedBox(width: 24),
+          SizedBox(width: 40),
+          SizedBox(width: 200, child: Text("Employee", style: TextStyle(fontWeight: FontWeight.w900))),
+          SizedBox(width: 150, child: Text("Status", style: TextStyle(fontWeight: FontWeight.w900))),
+          SizedBox(width: 120, child: Text("Clock In", style: TextStyle(fontWeight: FontWeight.w900))),
+          SizedBox(width: 120, child: Text("Clock Out", style: TextStyle(fontWeight: FontWeight.w900))),
+          SizedBox(width: 220, child: Text("Notes", style: TextStyle(fontWeight: FontWeight.w900))),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmployeeRow extends StatelessWidget {
+  final String employeeId;
+  final String name;
+  final String status;
+  final String? clockIn;
+  final String? clockOut;
+  final String note;
+
+  const _EmployeeRow({
+    required this.employeeId,
+    required this.name,
+    required this.status,
+    required this.clockIn,
+    required this.clockOut,
+    required this.note,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final attendance = context.watch<AttendanceProvider>();
+    final selected = attendance.isSelected(employeeId);
+    final isPresent = status == 'Present';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Row(
+        children: [
+          Checkbox(
+            value: selected,
+            onChanged: (v) => attendance.toggleSelect(employeeId, v ?? false),
+          ),
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: const Color(0xFFD4C4B0),
+            child: Text(
+              name.isNotEmpty ? name[0].toUpperCase() : "?",
+              style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF2C1810)),
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          SizedBox(width: 200, child: Text(name, style: const TextStyle(fontWeight: FontWeight.w800))),
+
+          SizedBox(
+            width: 150,
+            child: Row(
+              children: [
+                Icon(isPresent ? Icons.check_circle : Icons.cancel,
+                    color: isPresent ? Colors.green : Colors.red, size: 18),
+                const SizedBox(width: 8),
+                Text(isPresent ? "Present" : "Absent",
+                    style: TextStyle(fontWeight: FontWeight.w900, color: isPresent ? Colors.green : Colors.red)),
+              ],
+            ),
+          ),
+
+          SizedBox(width: 120, child: Text(clockIn ?? "--:--", style: const TextStyle(fontWeight: FontWeight.w800))),
+          SizedBox(width: 120, child: Text(clockOut ?? "--:--", style: const TextStyle(fontWeight: FontWeight.w800))),
+
+          SizedBox(
+            width: 220,
+            child: TextFormField(
+              initialValue: note,
+              onChanged: (v) => attendance.setNote(employeeId, v),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: "Notes...",
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaginationBar extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final attendance = context.watch<AttendanceProvider>();
+    final total = attendance.employees.length;
+    final start = attendance.page * attendance.pageSize;
+    final end = (start + attendance.pageSize).clamp(0, total);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            "Showing ${end - start} of $total employees",
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(onPressed: attendance.prevPage, icon: const Icon(Icons.chevron_left)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.black12),
+                ),
+                child: Text("${attendance.page + 1}", style: const TextStyle(fontWeight: FontWeight.w900)),
+              ),
+              IconButton(onPressed: attendance.nextPage, icon: const Icon(Icons.chevron_right)),
+            ],
+          ),
+          DropdownButton<int>(
+            value: attendance.pageSize,
+            items: const [5, 10, 15, 20, 30, 50]
+                .map((v) => DropdownMenuItem(value: v, child: Text("$v / page")))
+                .toList(),
+            onChanged: (v) {
+              if (v != null) attendance.setPageSize(v);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionChip({required this.label, required this.icon, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton.icon(
+      onPressed: onTap,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      icon: Icon(icon, size: 16),
+      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+    );
+  }
+}
+
+class _TopPerformanceCard extends StatelessWidget {
+  final String title;
+  final List rows;
+  const _TopPerformanceCard({required this.title, required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5EFE7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+        const SizedBox(height: 10),
+        ...rows.map((r) {
+          final name = (r.employeeName as String);
+          final present = (r.present as int);
+          final total = (r.total as int);
+          final rate = ((r.rate as double) * 100).toStringAsFixed(0);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w800))),
+                Text("$present/$total", style: const TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD4B896),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text("$rate%", style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF2C1810))),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ]),
+    );
+  }
+}
+
+// helpers
+String _fmt(DateTime d) {
+  final mm = d.month.toString().padLeft(2, '0');
+  final dd = d.day.toString().padLeft(2, '0');
+  return "${d.year}-$mm-$dd";
+}
+
+String _mName(int m) {
+  const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return names[m - 1];
+}

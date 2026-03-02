@@ -1,0 +1,145 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'providers/saved_provider.dart';
+import 'providers/theme_provider.dart';
+import 'providers/admin_provider.dart';
+import 'providers/auth_provider.dart';
+import 'providers/sales_provider.dart';
+import 'providers/inventory_provider.dart';
+import 'providers/product_provider.dart';
+import 'providers/orders_provider.dart';
+import 'providers/expenses_provider.dart';      // ✅ NEW
+import 'providers/attendance_provider.dart';   // ✅ NEW
+
+import 'screens/role_selection_screen.dart';
+import 'screens/user/home_screen.dart';
+import 'screens/user/category_screen.dart';
+import 'screens/user/saved_screen.dart';
+import 'screens/user/account_screen.dart';
+import 'screens/user/category_products_screen.dart';
+import 'screens/user/product_detail_screen.dart';
+
+import 'screens/admin/admin_main_screen.dart';
+import 'screens/admin/admin_login_screen.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => SavedProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => AdminProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => SalesProvider()),
+        ChangeNotifierProvider(create: (_) => InventoryProvider()),
+        ChangeNotifierProvider(create: (_) => ProductProvider()),
+        ChangeNotifierProvider(create: (_) => OrdersProvider()),
+        ChangeNotifierProvider(create: (_) => ExpensesProvider()),    // ✅ ADDED
+        ChangeNotifierProvider(create: (_) => AttendanceProvider()),  // ✅ ADDED
+      ],
+      child: Consumer<ThemeProvider>(
+        builder: (context, theme, _) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'OAKWOOD',
+            theme: theme.currentTheme,
+
+            // start on role selection
+            initialRoute: '/',
+
+            routes: {
+              '/': (context) => const RoleSelectionScreen(),
+
+              // user side (bottom navigation shell)
+              '/user-home': (context) => const UserMainBottomNav(),
+
+              // admin side
+              '/admin-login': (context) => const AdminLoginScreen(),
+              '/admin': (context) => const AdminMainScreen(),
+            },
+
+            // routes needing arguments
+            onGenerateRoute: (settings) {
+              if (settings.name == CategoryProductsScreen.routeName) {
+                final args = settings.arguments as CategoryProductsArgs;
+                return MaterialPageRoute(
+                  builder: (_) => CategoryProductsScreen(args: args),
+                );
+              }
+              if (settings.name == ProductDetailScreen.routeName) {
+                final args = settings.arguments as ProductDetailArgs;
+                return MaterialPageRoute(
+                  builder: (_) => ProductDetailScreen(args: args),
+                );
+              }
+              return null;
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ===== Bottom Navigation container for user =====
+
+class UserMainBottomNav extends StatefulWidget {
+  const UserMainBottomNav({super.key});
+
+  @override
+  State<UserMainBottomNav> createState() => _UserMainBottomNavState();
+}
+
+class _UserMainBottomNavState extends State<UserMainBottomNav> {
+  int _currentIndex = 0;
+
+  final _pages = const [
+    HomeScreen(),
+    CategoryScreen(),
+    SavedScreen(),
+    AccountScreen(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    const brown = Color(0xFF5C3B1E);
+
+    return Scaffold(
+      body: _pages[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        selectedItemColor: brown,
+        unselectedItemColor: brown.withOpacity(0.6),
+        backgroundColor: const Color(0xFFEFE7DD),
+        type: BottomNavigationBarType.fixed,
+        onTap: (i) => setState(() => _currentIndex = i),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.apps),
+            label: 'Category',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bookmark_border),
+            label: 'Saved',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            label: 'Account',
+          ),
+        ],
+      ),
+    );
+  }
+}

@@ -1,0 +1,162 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/product_provider.dart';
+import '../../models/product.dart';
+import '../../models/category.dart';
+import 'product_detail_screen.dart';
+
+class CategoryProductsArgs {
+  final String categoryName;
+
+  CategoryProductsArgs({required this.categoryName});
+}
+
+class CategoryProductsScreen extends StatelessWidget {
+  static const routeName = '/category-products';
+
+  final CategoryProductsArgs args;
+
+  const CategoryProductsScreen({super.key, required this.args});
+
+  @override
+  Widget build(BuildContext context) {
+    final pp = context.watch<ProductProvider>();
+    final CategoryModel? category =
+    pp.getCategoryByName(args.categoryName);
+    final products = pp.productsByCategory(args.categoryName);
+
+    const background = Color(0xFFF5EDE3);
+    const brown = Color(0xFF5C3B1E);
+
+    return SafeArea(
+      child: Scaffold(
+        backgroundColor: background,
+        appBar: AppBar(
+          backgroundColor: brown,
+          elevation: 0,
+          title: Text(category?.name ?? args.categoryName),
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: GridView.builder(
+            itemCount: products.length,
+            gridDelegate:
+            const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 14,
+              crossAxisSpacing: 14,
+              childAspectRatio: 0.72,
+            ),
+            itemBuilder: (context, index) {
+              final product = products[index];
+              return GestureDetector(
+                onTap: () {
+                  Navigator.pushNamed(
+                    context,
+                    ProductDetailScreen.routeName,
+                    arguments:
+                    ProductDetailArgs(productId: product.id),
+                  );
+                },
+                child: _CategoryProductCard(product: product),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryProductCard extends StatelessWidget {
+  final Product product;
+
+  const _CategoryProductCard({required this.product});
+
+  @override
+  Widget build(BuildContext context) {
+    const brown = Color(0xFF5C3B1E);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(18),
+              topRight: Radius.circular(18),
+            ),
+            child: AspectRatio(
+              aspectRatio: 4 / 3,
+              child: Image.network(
+                product.image,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              product.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: brown,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              '₹${product.price.toStringAsFixed(0)}',
+              style: const TextStyle(
+                color: brown,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const Spacer(),
+          if (product.isLowStock)
+            Padding(
+              padding: const EdgeInsets.only(left: 10, bottom: 8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: brown.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Low Stock',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
