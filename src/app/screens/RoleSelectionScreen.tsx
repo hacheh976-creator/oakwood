@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { ShoppingBag, ArrowRight } from "lucide-react";
-import oakwoodLogo from ""../assets/6d5cd73c5106dcd44ebfe7b3d0815fd92d5b5b0e.png";
+import oakwoodLogo from "../assets/6d5cd73c5106dcd44ebfe7b3d0815fd92d5b5b0e.png";
 
 export default function RoleSelectionScreen() {
   const navigate = useNavigate();
